@@ -37,11 +37,12 @@ async function bootstrap() {
 
   SwaggerModule.setup('api', app, document);
 
-  await app.listen(3001);
+  const port = process.env.PORT || 3001;
 
-  console.log('Erevna API running on http://localhost:3001');
+  await app.listen(port, '0.0.0.0');
 
-  console.log('Swagger running on http://localhost:3001/api');
+  console.log(`Erevna API running on port ${port}`);
+  console.log(`Swagger running on port ${port}/api`);
 }
 
 bootstrap();
