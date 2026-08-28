@@ -47,7 +47,7 @@ export default function TeacherLoginPage() {
       {/* Left Side */}
       <div className="hidden md:flex flex-col justify-center items-center bg-gradient-to-br from-blue-900 via-slate-900 to-blue-700 text-white p-12">
         <Image
-          src="/logo.png"
+          src="/logo3.png"
           alt="Erevna Logo"
           width={220}
           height={220}

@@ -53,24 +53,25 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-5 sm:px-8">
           <nav className="min-h-[82px] flex items-center justify-between gap-6">
             {/* BRAND */}
+            {/* BRAND */}
             <Link href="/" className="flex items-center gap-4 group shrink-0">
-              <div className="relative flex h-16 w-16 items-center justify-center rounded-2xl bg-white shadow-lg shadow-blue-950/30 p-1.5 transition duration-300 group-hover:scale-105">
+              <div className="relative flex h-16 w-16 items-center justify-center transition duration-300 group-hover:scale-105">
                 <Image
                   src="/logo2.png"
                   alt="Erevna Leadership Academy Logo"
                   width={64}
                   height={64}
-                  className="h-full w-full object-contain"
+                  className="h-full w-full object-contain drop-shadow-lg"
                   priority
                 />
               </div>
 
               <div className="hidden sm:block">
-                <p className="text-white font-bold text-lg leading-tight">
+                <p className="text-white font-extrabold text-lg leading-tight tracking-tight">
                   Erevna Leadership Academy
                 </p>
 
-                <p className="text-blue-300 text-xs font-medium tracking-[0.2em] uppercase mt-1">
+                <p className="text-blue-300 text-xs font-semibold tracking-[0.2em] uppercase mt-1">
                   Learn · Lead · Succeed
                 </p>
               </div>
@@ -136,19 +137,22 @@ export default function Home() {
           <div className="grid lg:grid-cols-[1.1fr_0.9fr] gap-14 lg:gap-20 items-center">
             {/* HERO CONTENT */}
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/30 bg-blue-400/10 px-4 py-2 mb-7">
-                <span className="h-2 w-2 rounded-full bg-blue-400 animate-pulse" />
-                <span className="text-sm font-semibold text-blue-200">
+              <div className="inline-flex items-center gap-3 rounded-full border border-blue-300/40 bg-blue-400/15 px-5 py-2.5 mb-7 shadow-lg shadow-blue-950/20">
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-300 animate-pulse shadow-[0_0_12px_rgba(147,197,253,0.9)]" />
+
+                <span className="text-sm sm:text-base font-extrabold tracking-wide text-white">
                   Erevna Leadership Academy
                 </span>
               </div>
 
-              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[0.95] tracking-tight">
-                Learn.
+              <h1 className="text-5xl sm:text-6xl lg:text-7xl font-black leading-[0.95] tracking-[-0.03em]">
+                <span className="text-white">Learn.</span>
+
                 <span className="block text-transparent bg-clip-text bg-gradient-to-r from-blue-300 via-cyan-200 to-white">
                   Lead.
                 </span>
-                <span className="block">Succeed.</span>
+
+                <span className="block text-white">Succeed.</span>
               </h1>
 
               <p className="mt-8 max-w-2xl text-lg md:text-xl leading-relaxed text-slate-300">
