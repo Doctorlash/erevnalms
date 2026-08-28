@@ -6,6 +6,7 @@ import { useAuth } from "../../../contexts/AuthContext";
 
 export default function TeacherQuestionsPage() {
   const { user } = useAuth();
+
   const [questions, setQuestions] = useState<any[]>([]);
   const [subjects, setSubjects] = useState<any[]>([]);
   const [topics, setTopics] = useState<any[]>([]);
@@ -25,15 +26,21 @@ export default function TeacherQuestionsPage() {
   });
 
   const loadData = async () => {
-    const questionsRes = await api.get(`/questions/teacher/${user.id}`);
+    if (!user) return;
 
-    const subjectsRes = await api.get(`/subjects/teacher/${user.id}`);
+    try {
+      const questionsRes = await api.get(`/questions/teacher/${user.id}`);
 
-    const topicsRes = await api.get(`/topics/teacher/${user.id}`);
+      const subjectsRes = await api.get(`/subjects/teacher/${user.id}`);
 
-    setQuestions(questionsRes.data);
-    setSubjects(subjectsRes.data);
-    setTopics(topicsRes.data);
+      const topicsRes = await api.get(`/topics/teacher/${user.id}`);
+
+      setQuestions(questionsRes.data);
+      setSubjects(subjectsRes.data);
+      setTopics(topicsRes.data);
+    } catch (error) {
+      console.error("Failed to load teacher question data:", error);
+    }
   };
 
   useEffect(() => {
@@ -72,19 +79,24 @@ export default function TeacherQuestionsPage() {
   const deleteQuestion = async (id: string) => {
     if (!confirm("Delete this question?")) return;
 
-    await api.delete(`/questions/${id}`);
+    try {
+      await api.delete(`/questions/${id}`);
 
-    loadData();
+      loadData();
+    } catch (error) {
+      console.error(error);
+      alert("Failed to delete question");
+    }
   };
 
   return (
     <TeacherLayout>
-      <h1 className="text-3xl font-bold mb-6">Question Bank</h1>
+      <h1 className="mb-6 text-3xl font-bold">Question Bank</h1>
 
-      <div className="bg-white p-6 rounded shadow mb-8">
+      <div className="mb-8 rounded bg-white p-6 shadow">
         <textarea
           placeholder="Question"
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           rows={3}
           value={form.question}
           onChange={(e) =>
@@ -97,7 +109,7 @@ export default function TeacherQuestionsPage() {
 
         <input
           placeholder="Option A"
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.optionA}
           onChange={(e) =>
             setForm({
@@ -109,7 +121,7 @@ export default function TeacherQuestionsPage() {
 
         <input
           placeholder="Option B"
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.optionB}
           onChange={(e) =>
             setForm({
@@ -121,7 +133,7 @@ export default function TeacherQuestionsPage() {
 
         <input
           placeholder="Option C"
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.optionC}
           onChange={(e) =>
             setForm({
@@ -133,7 +145,7 @@ export default function TeacherQuestionsPage() {
 
         <input
           placeholder="Option D"
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.optionD}
           onChange={(e) =>
             setForm({
@@ -145,7 +157,7 @@ export default function TeacherQuestionsPage() {
 
         <input
           placeholder="Correct Answer"
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.correctAnswer}
           onChange={(e) =>
             setForm({
@@ -157,7 +169,7 @@ export default function TeacherQuestionsPage() {
 
         <textarea
           placeholder="Explanation"
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           rows={2}
           value={form.explanation}
           onChange={(e) =>
@@ -169,7 +181,7 @@ export default function TeacherQuestionsPage() {
         />
 
         <select
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.subjectId}
           onChange={(e) =>
             setForm({
@@ -188,7 +200,7 @@ export default function TeacherQuestionsPage() {
         </select>
 
         <select
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.topicId}
           onChange={(e) =>
             setForm({
@@ -207,7 +219,7 @@ export default function TeacherQuestionsPage() {
         </select>
 
         <select
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.difficulty}
           onChange={(e) =>
             setForm({
@@ -222,7 +234,7 @@ export default function TeacherQuestionsPage() {
         </select>
 
         <select
-          className="border p-2 w-full mb-3"
+          className="mb-3 w-full border p-2"
           value={form.examType}
           onChange={(e) =>
             setForm({
@@ -237,8 +249,9 @@ export default function TeacherQuestionsPage() {
         </select>
 
         <button
+          type="button"
           onClick={createQuestion}
-          className="bg-blue-600 text-white px-4 py-2 rounded"
+          className="rounded bg-blue-600 px-4 py-2 text-white"
         >
           Create Question
         </button>
@@ -246,7 +259,7 @@ export default function TeacherQuestionsPage() {
 
       <div className="space-y-4">
         {questions.map((question) => (
-          <div key={question.id} className="bg-white p-4 rounded shadow">
+          <div key={question.id} className="rounded bg-white p-4 shadow">
             <h3 className="font-bold">{question.question}</h3>
 
             <p>Subject: {question.subject?.name}</p>
@@ -258,8 +271,9 @@ export default function TeacherQuestionsPage() {
             <p>Exam Type: {question.examType}</p>
 
             <button
+              type="button"
               onClick={() => deleteQuestion(question.id)}
-              className="bg-red-600 text-white px-3 py-1 rounded mt-3"
+              className="mt-3 rounded bg-red-600 px-3 py-1 text-white"
             >
               Delete
             </button>

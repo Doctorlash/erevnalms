@@ -1,9 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useState } from "react";
 
-import TeacherLayout from "../../../layouts/TeacherLayout";
-import useTeacherAuth from "../../../hooks/useTeacherAuth";
-import api from "../../../services/api";
+import TeacherLayout from "../layouts/TeacherLayout";
+import useTeacherAuth from "../hooks/useTeacherAuth";
+import api from "../services/api";
 
 interface DashboardData {
   stats: {

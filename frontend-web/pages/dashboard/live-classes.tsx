@@ -55,6 +55,28 @@ export default function StudentLiveClassesPage() {
     }
   };
 
+  useEffect(() => {
+    loadClasses();
+  }, [user]);
+
+  const joinClass = (liveClass: LiveClass) => {
+    if (!liveClass.meetingLink) {
+      setError("This class does not have a meeting link yet.");
+      return;
+    }
+
+    try {
+      setJoining(liveClass.id);
+
+      window.open(liveClass.meetingLink, "_blank", "noopener,noreferrer");
+    } catch (err) {
+      console.error("Failed to open live class:", err);
+      setError("Unable to open the live class.");
+    } finally {
+      setJoining(null);
+    }
+  };
+
   const getClassStatus = (liveClass: LiveClass) => {
     const now = new Date();
     const start = new Date(liveClass.startTime);
