@@ -15,6 +15,9 @@ export class AnalyticsService {
       include: {
         exam: true,
       },
+      orderBy: {
+        startedAt: 'desc',
+      },
     });
 
     const totalExams = attempts.length;
@@ -128,7 +131,7 @@ export class AnalyticsService {
         exam: true,
       },
       orderBy: {
-        createdAt: 'desc',
+        startedAt: 'desc',
       },
       take: 10,
     });

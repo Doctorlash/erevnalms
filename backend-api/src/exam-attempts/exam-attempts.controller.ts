@@ -69,6 +69,7 @@ export class ExamAttemptsController {
   ) {
     return this.service.getAttemptsByExam(examId);
   }
+
   @Get('teacher/:teacherId')
   getTeacherAnalytics(
     @Param('teacherId')

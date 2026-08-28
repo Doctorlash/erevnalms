@@ -3,6 +3,7 @@ import {
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
+
 import { CertificatesService } from '../certificates/certificates.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -15,7 +16,9 @@ export class ExamAttemptsService {
 
   async startExam(examId: string, userId: string) {
     const exam = await this.prisma.exam.findUnique({
-      where: { id: examId },
+      where: {
+        id: examId,
+      },
     });
 
     if (!exam) {
@@ -36,11 +39,27 @@ export class ExamAttemptsService {
     selectedAnswer: string,
   ) {
     const question = await this.prisma.question.findUnique({
-      where: { id: questionId },
+      where: {
+        id: questionId,
+      },
     });
 
     if (!question) {
       throw new NotFoundException('Question not found');
+    }
+
+    const attempt = await this.prisma.examAttempt.findUnique({
+      where: {
+        id: attemptId,
+      },
+    });
+
+    if (!attempt) {
+      throw new NotFoundException('Exam attempt not found');
+    }
+
+    if (attempt.completed) {
+      throw new BadRequestException('Exam has already been submitted');
     }
 
     const isCorrect = question.correctAnswer === selectedAnswer;
@@ -117,6 +136,104 @@ export class ExamAttemptsService {
     };
   }
 
+  async getResult(attemptId: string) {
+    const attempt = await this.prisma.examAttempt.findUnique({
+      where: {
+        id: attemptId,
+      },
+      include: {
+        user: true,
+        exam: {
+          include: {
+            subject: true,
+          },
+        },
+        answers: {
+          include: {
+            question: true,
+          },
+        },
+      },
+    });
+
+    if (!attempt) {
+      throw new NotFoundException('Exam attempt not found');
+    }
+
+    const totalQuestions = attempt.answers.length;
+
+    const correctAnswers = attempt.answers.filter(
+      (answer) => answer.isCorrect,
+    ).length;
+
+    const wrongAnswers = attempt.answers.filter(
+      (answer) => !answer.isCorrect,
+    ).length;
+
+    return {
+      attemptId: attempt.id,
+
+      user: {
+        id: attempt.user.id,
+        firstName: attempt.user.firstName,
+        lastName: attempt.user.lastName,
+        email: attempt.user.email,
+      },
+
+      exam: {
+        id: attempt.exam.id,
+        title: attempt.exam.title,
+        subject: attempt.exam.subject,
+      },
+
+      score: attempt.score,
+      completed: attempt.completed,
+      startedAt: attempt.startedAt,
+      submittedAt: attempt.submittedAt,
+
+      statistics: {
+        totalQuestions,
+        correctAnswers,
+        wrongAnswers,
+        percentage:
+          totalQuestions > 0
+            ? Math.round((correctAnswers / totalQuestions) * 100)
+            : 0,
+      },
+
+      answers: attempt.answers,
+    };
+  }
+
+  async getUserAttempts(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    return this.prisma.examAttempt.findMany({
+      where: {
+        userId,
+      },
+      include: {
+        exam: {
+          include: {
+            subject: true,
+          },
+        },
+        answers: true,
+      },
+      orderBy: {
+        startedAt: 'desc',
+      },
+    });
+  }
+
   async findAllAttempts() {
     return this.prisma.examAttempt.findMany({
       include: {
@@ -143,6 +260,7 @@ export class ExamAttemptsService {
       },
     });
   }
+
   async getTeacherAnalytics(teacherId: string) {
     const attempts = await this.prisma.examAttempt.findMany({
       where: {
