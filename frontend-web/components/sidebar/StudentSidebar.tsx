@@ -66,6 +66,11 @@ export default function StudentSidebar() {
       icon: "📚",
     },
     {
+      name: "Live Classes",
+      href: "/dashboard/live-classes",
+      icon: "🎥",
+    },
+    {
       name: "Certificates",
       href: "/dashboard/certificates",
       icon: "🏆",

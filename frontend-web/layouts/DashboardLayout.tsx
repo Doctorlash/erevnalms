@@ -7,7 +7,11 @@ import StudentSidebar from "../components/sidebar/StudentSidebar";
 import TeacherSidebar from "../components/sidebar/TeacherSidebar";
 import AdminSidebar from "../components/sidebar/AdminSidebar";
 
-export default function DashboardLayout({ children }: { children: ReactNode }) {
+interface Props {
+  children: ReactNode;
+}
+
+export default function DashboardLayout({ children }: Props) {
   const { user } = useAuth();
 
   const renderSidebar = () => {
@@ -20,29 +24,30 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
       case "TEACHER":
         return <TeacherSidebar />;
 
+      case "STUDENT":
       default:
         return <StudentSidebar />;
     }
   };
 
   return (
-    <div className="min-h-screen flex bg-slate-100">
-      {/* Sidebar */}
-
-      <aside className="w-72 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl flex flex-col">
-        {/* Logo Section */}
-
-        <div className="p-6 border-b border-slate-700">
+    <div className="h-screen overflow-hidden flex bg-slate-100">
+      {/* ============================================================
+          SIDEBAR
+          ============================================================ */}
+      <aside className="hidden lg:flex w-72 shrink-0 h-screen bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl flex-col">
+        {/* LOGO */}
+        <div className="shrink-0 p-6 border-b border-slate-700">
           <div className="flex items-center gap-3">
             <Image
               src="/logo.png"
               alt="Erevna Logo"
               width={55}
               height={55}
-              className="rounded-full"
+              className="rounded-full object-cover"
             />
 
-            <div>
+            <div className="min-w-0">
               <h2 className="text-2xl font-bold">Erevna</h2>
 
               <p className="text-xs text-slate-300">Leadership Academy</p>
@@ -50,17 +55,16 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {/* User Card */}
-
-        <div className="p-5">
+        {/* USER CARD */}
+        <div className="shrink-0 p-5">
           <div className="bg-slate-800 rounded-xl p-4 border border-slate-700">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-yellow-500 flex items-center justify-center text-black font-bold text-lg">
-                {user?.firstName?.charAt(0)}
+              <div className="h-12 w-12 shrink-0 rounded-full bg-yellow-500 flex items-center justify-center text-black font-bold text-lg">
+                {user?.firstName?.charAt(0)?.toUpperCase() || "U"}
               </div>
 
-              <div>
-                <p className="font-semibold">
+              <div className="min-w-0">
+                <p className="font-semibold truncate">
                   {user?.firstName} {user?.lastName}
                 </p>
 
@@ -70,41 +74,48 @@ export default function DashboardLayout({ children }: { children: ReactNode }) {
           </div>
         </div>
 
-        {/* Sidebar Links */}
-
-        <div className="flex-1 px-4 pb-6 overflow-y-auto">
+        {/* ============================================================
+            SIDEBAR NAVIGATION
+            THIS AREA SCROLLS INDEPENDENTLY
+            ============================================================ */}
+        <div className="flex-1 min-h-0 overflow-y-auto px-4 pb-6 scrollbar-thin scrollbar-thumb-slate-600 scrollbar-track-transparent">
           {renderSidebar()}
         </div>
 
-        {/* Footer */}
-
-        <div className="border-t border-slate-700 p-4 text-center text-xs text-slate-400">
+        {/* FOOTER */}
+        <div className="shrink-0 border-t border-slate-700 p-4 text-center text-xs text-slate-400">
           © {new Date().getFullYear()} Erevna LMS
         </div>
       </aside>
 
-      {/* Main Content */}
-
-      <div className="flex-1 flex flex-col">
-        {/* Top Header */}
-
-        <header className="bg-white shadow-sm px-8 py-4 border-b">
-          <div className="flex justify-between items-center">
+      {/* ============================================================
+          MAIN AREA
+          ============================================================ */}
+      <div className="flex-1 min-w-0 h-screen flex flex-col overflow-hidden">
+        {/* TOP HEADER */}
+        <header className="shrink-0 h-20 bg-white shadow-sm px-6 lg:px-8 border-b border-slate-200">
+          <div className="h-full flex justify-between items-center">
+            {/* LEFT */}
             <div>
               <h1 className="font-bold text-xl text-slate-800">Welcome Back</h1>
 
               <p className="text-sm text-slate-500">Learn. Lead. Succeed.</p>
             </div>
 
+            {/* RIGHT */}
             <div className="bg-blue-50 text-blue-700 px-4 py-2 rounded-full text-sm font-medium">
               {user?.role}
             </div>
           </div>
         </header>
 
-        {/* Page Content */}
-
-        <main className="flex-1 p-8 overflow-y-auto">{children}</main>
+        {/* ============================================================
+            PAGE CONTENT
+            THIS AREA SCROLLS INDEPENDENTLY FROM SIDEBAR
+            ============================================================ */}
+        <main className="flex-1 min-h-0 overflow-y-auto p-5 sm:p-6 lg:p-8">
+          <div className="max-w-[1600px] mx-auto">{children}</div>
+        </main>
       </div>
     </div>
   );

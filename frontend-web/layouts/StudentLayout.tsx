@@ -13,11 +13,11 @@ export default function StudentLayout({ children }: Props) {
   const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-slate-100 flex">
+    <div className="h-screen overflow-hidden bg-slate-100 flex">
       {/* SIDEBAR */}
-      <aside className="hidden lg:flex w-72 shrink-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl flex-col">
+      <aside className="hidden lg:flex h-screen w-72 shrink-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl flex-col">
         {/* Logo */}
-        <div className="px-6 py-6 border-b border-white/10">
+        <div className="shrink-0 px-6 py-6 border-b border-white/10">
           <div className="flex items-center gap-3">
             <Image
               src="/logo.png"
@@ -38,10 +38,10 @@ export default function StudentLayout({ children }: Props) {
         </div>
 
         {/* Student profile */}
-        <div className="p-5">
+        <div className="shrink-0 p-5">
           <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-lg">
+              <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold text-lg">
                 {user?.firstName?.charAt(0)?.toUpperCase() || "S"}
               </div>
 
@@ -58,8 +58,8 @@ export default function StudentLayout({ children }: Props) {
           </div>
         </div>
 
-        {/* Navigation */}
-        <div className="flex-1 px-4 pb-6 overflow-y-auto">
+        {/* Navigation - INDEPENDENT SCROLL */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
           <p className="px-3 mb-3 text-[11px] uppercase tracking-widest text-slate-500 font-semibold">
             My Learning
           </p>
@@ -68,7 +68,7 @@ export default function StudentLayout({ children }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="border-t border-white/10 px-5 py-4">
+        <div className="shrink-0 border-t border-white/10 px-5 py-4">
           <p className="text-xs text-slate-500 text-center">
             © {new Date().getFullYear()} Erevna LMS
           </p>
@@ -76,9 +76,9 @@ export default function StudentLayout({ children }: Props) {
       </aside>
 
       {/* MAIN */}
-      <div className="flex-1 min-w-0 flex flex-col">
+      <div className="min-w-0 min-h-0 flex-1 flex flex-col">
         {/* HEADER */}
-        <header className="sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
+        <header className="shrink-0 sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
           <div className="h-20 px-6 lg:px-8 flex items-center justify-between">
             <div>
               <p className="text-sm text-slate-500">Student Portal</p>
@@ -101,16 +101,18 @@ export default function StudentLayout({ children }: Props) {
               <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white font-bold">
                 {user?.firstName?.charAt(0)?.toUpperCase() || "S"}
               </div>
+
               <LogoutButton className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 rounded-lg" />
             </div>
           </div>
         </header>
 
-        {/* CONTENT */}
-        <main className="flex-1 p-5 sm:p-6 lg:p-8">
+        {/* CONTENT - INDEPENDENT SCROLL */}
+        <main className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 lg:p-8">
           <div className="max-w-[1600px] mx-auto">{children}</div>
         </main>
       </div>
+
       <MessageWidget />
     </div>
   );

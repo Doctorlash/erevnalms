@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element */
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import StudentLayout from "../../layouts/StudentLayout";
 import useStudentAuth from "../../hooks/useStudentAuth";
@@ -71,6 +71,11 @@ export default function ProfilePage() {
       setLoading(false);
     }
   };
+  useEffect(() => {
+    if (!user) return;
+
+    loadProfile();
+  }, [user]);
 
   const updateField = (field: keyof Profile, value: string) => {
     setProfile((current) => {

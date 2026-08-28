@@ -44,7 +44,7 @@ export default function TeacherSidebar() {
     },
     {
       name: "Messages",
-      href: "/dashboard/messages",
+      href: "/dashboard/teacher/messages",
       icon: "💬",
     },
     {

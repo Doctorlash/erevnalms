@@ -11,21 +11,6 @@ export default function useRequireAuth() {
 
     if (!token || !user) {
       router.replace("/login");
-      return;
-    }
-
-    if (user.role !== "STUDENT") {
-      if (user.role === "TEACHER") {
-        router.replace("/teacher");
-        return;
-      }
-
-      if (user.role === "ADMIN") {
-        router.replace("/admin");
-        return;
-      }
-
-      router.replace("/login");
     }
   }, [user, token, router]);
 
