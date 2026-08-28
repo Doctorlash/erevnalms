@@ -1,0 +1,529 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                    String                 @id @default(uuid())
+  firstName             String
+  lastName              String
+  email                 String                 @unique
+  password              String
+  role                  Role                   @default(STUDENT)
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  isActive              Boolean                @default(true)
+  resetPasswordToken    String?
+  resetPasswordExpires  DateTime?
+  bio                   String?
+  classLevel            String?
+  phone                 String?
+  profileImage          String?
+  school                String?
+  isOnline              Boolean                @default(false)
+  lastSeen              DateTime?
+  announcements         Announcement[]         @relation("TeacherAnnouncements")
+  teachingAssignments   Assignment[]           @relation("TeacherAssignments")
+  assignmentSubmissions AssignmentSubmission[] @relation("StudentAssignments")
+  attendances           Attendance[]           @relation("StudentAttendance")
+  certificates          Certificate[]
+  communityComments     CommunityComment[]
+  communityLikes        CommunityLike[]
+  communityPosts        CommunityPost[]
+  conversationOne       Conversation[]         @relation("ParticipantOne")
+  conversationTwo       Conversation[]         @relation("ParticipantTwo")
+  DiscussionReply       DiscussionReply[]
+  DiscussionThread      DiscussionThread[]
+  enrollments           Enrollment[]
+  resources             Resource[]
+  examAttempts          ExamAttempt[]
+  GroupMember           GroupMember[]
+  approvedLessons       Lesson[]               @relation("LessonApprovedBy")
+  createdLessons        Lesson[]               @relation("LessonCreatedBy")
+  lessonProgress        LessonProgress[]
+  teachingClasses       LiveClass[]            @relation("TeacherClasses")
+  sentMessages          Message[]              @relation("SentMessages")
+  MessageReaction       MessageReaction[]
+  notifications         Notification[]
+  teachingSubjects      Subject[]              @relation("TeacherSubjects")
+  subscriptions         Subscription[]
+  teacherProfile        TeacherProfile?
+}
+
+model Subject {
+  id               String             @id @default(uuid())
+  name             String             @unique
+  description      String?
+  isActive         Boolean            @default(true)
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+  teacherId        String?
+  announcements    Announcement[]
+  assignments      Assignment[]
+  certificates     Certificate[]
+  resources        Resource[]
+  communityPosts   CommunityPost[]
+  DiscussionThread DiscussionThread[]
+  enrollments      Enrollment[]
+  Exam             Exam[]
+  Lesson           Lesson[]
+  LiveClass        LiveClass[]
+  questions        Question[]
+  teacher          User?              @relation("TeacherSubjects", fields: [teacherId], references: [id])
+  topics           Topic[]
+}
+
+model Lesson {
+  id              String           @id @default(uuid())
+  title           String
+  description     String?
+  content         String
+  videoUrl        String?
+  subjectId       String?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  duration        Int?
+  isPublished     Boolean          @default(false)
+  topicId         String
+  isPremium       Boolean          @default(false)
+  approvedAt      DateTime?
+  approvedById    String?
+  createdById     String?
+  rejectionReason String?
+  status          LessonStatus     @default(DRAFT)
+  approvedBy      User?            @relation("LessonApprovedBy", fields: [approvedById], references: [id])
+  createdBy       User?            @relation("LessonCreatedBy", fields: [createdById], references: [id])
+  Subject         Subject?         @relation(fields: [subjectId], references: [id])
+  topic           Topic            @relation(fields: [topicId], references: [id])
+  lessonProgress  LessonProgress[]
+}
+
+model Topic {
+  id          String     @id @default(uuid())
+  name        String
+  description String?
+  subjectId   String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  lessons     Lesson[]
+  questions   Question[]
+  subject     Subject    @relation(fields: [subjectId], references: [id])
+}
+
+model Enrollment {
+  id         String   @id @default(uuid())
+  userId     String
+  subjectId  String
+  enrolledAt DateTime @default(now())
+  subject    Subject  @relation(fields: [subjectId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, subjectId])
+}
+
+model LessonProgress {
+  id         String   @id @default(uuid())
+  userId     String
+  lessonId   String
+  completed  Boolean  @default(false)
+  progress   Int      @default(0)
+  lastViewed DateTime @default(now())
+  lesson     Lesson   @relation(fields: [lessonId], references: [id])
+  user       User     @relation(fields: [userId], references: [id])
+
+  @@unique([userId, lessonId])
+}
+
+model Question {
+  id            String         @id @default(uuid())
+  question      String
+  optionA       String
+  optionB       String
+  optionC       String
+  optionD       String
+  correctAnswer String
+  explanation   String?
+  subjectId     String
+  createdAt     DateTime       @default(now())
+  difficulty    Difficulty     @default(EASY)
+  examType      ExamType       @default(JAMB)
+  topicId       String?
+  updatedAt     DateTime       @updatedAt
+  examAnswers   ExamAnswer[]
+  examQuestions ExamQuestion[]
+  subject       Subject        @relation(fields: [subjectId], references: [id])
+  topic         Topic?         @relation(fields: [topicId], references: [id])
+}
+
+model Exam {
+  id            String         @id @default(uuid())
+  title         String
+  subjectId     String
+  duration      Int
+  totalMarks    Int
+  isPublished   Boolean        @default(false)
+  createdAt     DateTime       @default(now())
+  certificates  Certificate[]
+  subject       Subject        @relation(fields: [subjectId], references: [id])
+  attempts      ExamAttempt[]
+  examQuestions ExamQuestion[]
+}
+
+model ExamAttempt {
+  id          String       @id @default(uuid())
+  examId      String
+  userId      String
+  score       Int          @default(0)
+  startedAt   DateTime     @default(now())
+  submittedAt DateTime?
+  completed   Boolean      @default(false)
+  answers     ExamAnswer[]
+  exam        Exam         @relation(fields: [examId], references: [id])
+  user        User         @relation(fields: [userId], references: [id])
+}
+
+model ExamQuestion {
+  id         String   @id @default(uuid())
+  examId     String
+  questionId String
+  exam       Exam     @relation(fields: [examId], references: [id])
+  question   Question @relation(fields: [questionId], references: [id])
+
+  @@unique([examId, questionId])
+}
+
+model ExamAnswer {
+  id             String      @id @default(uuid())
+  attemptId      String
+  questionId     String
+  selectedAnswer String
+  isCorrect      Boolean
+  createdAt      DateTime    @default(now())
+  attempt        ExamAttempt @relation(fields: [attemptId], references: [id])
+  question       Question    @relation(fields: [questionId], references: [id])
+
+  @@unique([attemptId, questionId])
+}
+
+model Subscription {
+  id               String             @id @default(uuid())
+  userId           String
+  plan             SubscriptionPlan   @default(FREE)
+  status           SubscriptionStatus @default(PENDING)
+  startDate        DateTime?
+  endDate          DateTime?
+  paymentReference String?
+  createdAt        DateTime           @default(now())
+  user             User               @relation(fields: [userId], references: [id])
+}
+
+model LiveClass {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  subjectId   String
+  teacherId   String
+  meetingLink String
+  startTime   DateTime
+  endTime     DateTime
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  attendances Attendance[]
+  subject     Subject      @relation(fields: [subjectId], references: [id])
+  teacher     User         @relation("TeacherClasses", fields: [teacherId], references: [id])
+}
+
+model Attendance {
+  id          String    @id @default(uuid())
+  liveClassId String
+  studentId   String
+  joinedAt    DateTime  @default(now())
+  liveClass   LiveClass @relation(fields: [liveClassId], references: [id])
+  student     User      @relation("StudentAttendance", fields: [studentId], references: [id])
+
+  @@unique([liveClassId, studentId])
+}
+
+model Assignment {
+  id          String                 @id @default(uuid())
+  title       String
+  description String?
+  subjectId   String
+  teacherId   String
+  dueDate     DateTime
+  maxScore    Int                    @default(100)
+  isPublished Boolean                @default(false)
+  createdAt   DateTime               @default(now())
+  updatedAt   DateTime               @updatedAt
+  subject     Subject                @relation(fields: [subjectId], references: [id])
+  teacher     User                   @relation("TeacherAssignments", fields: [teacherId], references: [id])
+  submissions AssignmentSubmission[]
+}
+
+model AssignmentSubmission {
+  id           String     @id @default(uuid())
+  assignmentId String
+  studentId    String
+  content      String
+  score        Int?
+  feedback     String?
+  submittedAt  DateTime   @default(now())
+  gradedAt     DateTime?
+  assignment   Assignment @relation(fields: [assignmentId], references: [id])
+  student      User       @relation("StudentAssignments", fields: [studentId], references: [id])
+
+  @@unique([assignmentId, studentId])
+}
+
+model Announcement {
+  id          String   @id @default(uuid())
+  title       String
+  message     String
+  teacherId   String
+  subjectId   String?
+  isPublished Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  subject     Subject? @relation(fields: [subjectId], references: [id])
+  teacher     User     @relation("TeacherAnnouncements", fields: [teacherId], references: [id])
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  userId    String
+  title     String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id])
+}
+
+model Certificate {
+  id                String   @id @default(uuid())
+  userId            String
+  subjectId         String?
+  examId            String?
+  certificateNumber String   @unique
+  issuedAt          DateTime @default(now())
+  exam              Exam?    @relation(fields: [examId], references: [id])
+  subject           Subject? @relation(fields: [subjectId], references: [id])
+  user              User     @relation(fields: [userId], references: [id])
+}
+
+model CommunityPost {
+  id        String             @id @default(uuid())
+  userId    String
+  title     String
+  content   String
+  subjectId String?
+  createdAt DateTime           @default(now())
+  comments  CommunityComment[]
+  likes     CommunityLike[]
+  subject   Subject?           @relation(fields: [subjectId], references: [id])
+  user      User               @relation(fields: [userId], references: [id])
+}
+
+model CommunityComment {
+  id        String        @id @default(uuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime      @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+}
+
+model CommunityLike {
+  id     String        @id @default(uuid())
+  postId String
+  userId String
+  post   CommunityPost @relation(fields: [postId], references: [id])
+  user   User          @relation(fields: [userId], references: [id])
+
+  @@unique([postId, userId])
+}
+
+model DiscussionThread {
+  id        String            @id @default(uuid())
+  title     String
+  content   String
+  userId    String
+  subjectId String?
+  createdAt DateTime          @default(now())
+  replies   DiscussionReply[]
+  subject   Subject?          @relation(fields: [subjectId], references: [id])
+  user      User              @relation(fields: [userId], references: [id])
+}
+
+model DiscussionReply {
+  id        String           @id @default(uuid())
+  threadId  String
+  userId    String
+  content   String
+  createdAt DateTime         @default(now())
+  thread    DiscussionThread @relation(fields: [threadId], references: [id])
+  user      User             @relation(fields: [userId], references: [id])
+}
+
+model StudyGroup {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  createdBy   String
+  createdAt   DateTime      @default(now())
+  members     GroupMember[]
+}
+
+model GroupMember {
+  id       String     @id @default(uuid())
+  groupId  String
+  userId   String
+  joinedAt DateTime   @default(now())
+  group    StudyGroup @relation(fields: [groupId], references: [id])
+  user     User       @relation(fields: [userId], references: [id])
+
+  @@unique([groupId, userId])
+}
+
+model Conversation {
+  id               String    @id @default(uuid())
+  createdAt        DateTime  @default(now())
+  participantOneId String
+  participantTwoId String
+  participantOne   User      @relation("ParticipantOne", fields: [participantOneId], references: [id])
+  participantTwo   User      @relation("ParticipantTwo", fields: [participantTwoId], references: [id])
+  messages         Message[]
+}
+
+model Message {
+  id             String            @id @default(uuid())
+  conversationId String
+  senderId       String
+  content        String
+  createdAt      DateTime          @default(now())
+  isRead         Boolean           @default(false)
+  fileName       String?
+  fileSize       Int?
+  fileType       String?
+  fileUrl        String?
+  conversation   Conversation      @relation(fields: [conversationId], references: [id])
+  sender         User              @relation("SentMessages", fields: [senderId], references: [id])
+  reactions      MessageReaction[]
+}
+
+model MessageReaction {
+  id        String   @id @default(uuid())
+  messageId String
+  userId    String
+  emoji     String
+  createdAt DateTime @default(now())
+  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@unique([messageId, userId, emoji])
+}
+
+model TeacherProfile {
+  id             String   @id @default(uuid())
+  userId         String   @unique
+  qualification  String?
+  specialization String?
+  experience     Int?
+  officeHours    String?
+  about          String?
+  linkedin       String?
+  website        String?
+  twitter        String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model ContactMessage {
+  id        String        @id @default(uuid())
+  name      String
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  status    ContactStatus @default(UNREAD)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+}
+
+enum ContactStatus {
+  UNREAD
+  READ
+  RESOLVED
+}
+
+enum Role {
+  ADMIN
+  TEACHER
+  STUDENT
+}
+
+enum Difficulty {
+  EASY
+  MEDIUM
+  HARD
+}
+
+enum ExamType {
+  WAEC
+  JAMB
+  NECO
+}
+
+enum SubscriptionPlan {
+  FREE
+  BASIC
+  PREMIUM
+  SCHOOL
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
+  PENDING
+}
+
+enum LessonStatus {
+  DRAFT
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+}
+
+enum ResourceType {
+  PDF
+  VIDEO
+  AUDIO
+}
+
+model Resource {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  type        ResourceType
+  fileUrl     String
+  fileName    String
+  fileSize    Int?
+  publicId    String?
+  subjectId   String
+  teacherId   String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  subject Subject @relation(fields: [subjectId], references: [id])
+  teacher User    @relation(fields: [teacherId], references: [id])
+
+  @@index([subjectId])
+  @@index([teacherId])
+  @@index([type])
+}
