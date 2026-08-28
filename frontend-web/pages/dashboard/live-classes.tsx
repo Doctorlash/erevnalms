@@ -56,22 +56,46 @@ export default function StudentLiveClassesPage() {
   };
 
   useEffect(() => {
-    loadClasses();
+    if (user) {
+      loadClasses();
+    }
   }, [user]);
 
-  const joinClass = (liveClass: LiveClass) => {
-    if (!liveClass.meetingLink) {
-      setError("This class does not have a meeting link yet.");
+  const joinClass = async (liveClass: LiveClass) => {
+    if (!user) {
+      setError("You must be logged in to join a live class.");
       return;
     }
 
     try {
       setJoining(liveClass.id);
+      setError("");
+
+      /*
+       * Notify the backend that the student is joining the class.
+       * The backend endpoint may return attendance information.
+       *
+       * If the endpoint is not available or does not return a response,
+       * we still use the meeting link supplied by the live class.
+       */
+      try {
+        await api.post("/live-classes/join", {
+          liveClassId: liveClass.id,
+          userId: user.id,
+        });
+      } catch (joinError) {
+        console.warn("Unable to record class attendance:", joinError);
+      }
+
+      if (!liveClass.meetingLink) {
+        setError("This live class does not have a meeting link yet.");
+        return;
+      }
 
       window.open(liveClass.meetingLink, "_blank", "noopener,noreferrer");
     } catch (err) {
-      console.error("Failed to open live class:", err);
-      setError("Unable to open the live class.");
+      console.error("Failed to join live class:", err);
+      setError("Unable to join this live class.");
     } finally {
       setJoining(null);
     }
@@ -279,7 +303,7 @@ export default function StudentLiveClassesPage() {
                         </h3>
 
                         <p className="text-sm text-gray-500">
-                          {liveClass.subject?.name}
+                          {liveClass.subject?.name || "Subject"}
                         </p>
                       </div>
 
