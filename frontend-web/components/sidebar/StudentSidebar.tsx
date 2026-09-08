@@ -76,6 +76,11 @@ export default function StudentSidebar() {
       icon: "🏆",
     },
     {
+      name: "support ticket",
+      href: "/dashboard/support",
+      icon: "🎫",
+    },
+    {
       name: "Notifications",
       href: "/dashboard/notifications",
       icon: "🔔",
