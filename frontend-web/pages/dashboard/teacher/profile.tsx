@@ -33,19 +33,15 @@ export default function TeacherProfilePage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
-  const [error, setError] = useState("");
-
-  // =========================================================
-  // LOAD TEACHER PROFILE
-  // =========================================================
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
   const loadProfile = async () => {
     if (!user) return;
 
     try {
       setLoading(true);
-      setError("");
 
       const response = await api.get("/profile/me");
 
@@ -66,9 +62,7 @@ export default function TeacherProfilePage() {
     } catch (error: any) {
       console.error("Failed to load teacher profile:", error);
 
-      setError(
-        error?.response?.data?.message || "Unable to load your profile.",
-      );
+      alert(error?.response?.data?.message || "Unable to load your profile.");
     } finally {
       setLoading(false);
     }
@@ -79,10 +73,6 @@ export default function TeacherProfilePage() {
       loadProfile();
     }
   }, [user]);
-
-  // =========================================================
-  // UPDATE FIELD
-  // =========================================================
 
   const updateField = (field: keyof TeacherProfile, value: string) => {
     setProfile((current) => {
@@ -95,16 +85,11 @@ export default function TeacherProfilePage() {
     });
   };
 
-  // =========================================================
-  // UPDATE PROFILE
-  // =========================================================
-
   const updateProfile = async () => {
     if (!profile) return;
 
     try {
       setSaving(true);
-      setError("");
 
       await api.patch("/profile/me", {
         firstName: profile.firstName,
@@ -113,7 +98,6 @@ export default function TeacherProfilePage() {
         school: profile.school,
         classLevel: profile.classLevel,
         bio: profile.bio,
-        profileImage: profile.profileImage,
       });
 
       alert("Profile updated successfully.");
@@ -122,17 +106,62 @@ export default function TeacherProfilePage() {
     } catch (error: any) {
       console.error("Failed to update profile:", error);
 
-      setError(
-        error?.response?.data?.message || "Unable to update your profile.",
-      );
+      alert(error?.response?.data?.message || "Unable to update your profile.");
     } finally {
       setSaving(false);
     }
   };
 
-  // =========================================================
-  // LOADING
-  // =========================================================
+  const uploadAvatar = async () => {
+    if (!selectedFile || !user) {
+      alert("Please select an image first.");
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(selectedFile.type)) {
+      alert("Only JPEG, PNG, and WebP images are allowed.");
+      return;
+    }
+
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      alert("Profile picture must not exceed 5 MB.");
+      return;
+    }
+
+    try {
+      setUploading(true);
+
+      const formData = new FormData();
+
+      formData.append("file", selectedFile);
+
+      await api.post("/profile/avatar", formData);
+
+      alert("Profile picture updated successfully.");
+
+      setSelectedFile(null);
+
+      const fileInput = document.getElementById(
+        "teacher-profile-picture",
+      ) as HTMLInputElement | null;
+
+      if (fileInput) {
+        fileInput.value = "";
+      }
+
+      await loadProfile();
+    } catch (error: any) {
+      console.error("Failed to upload profile picture:", error);
+
+      alert(
+        error?.response?.data?.message || "Unable to upload profile picture.",
+      );
+    } finally {
+      setUploading(false);
+    }
+  };
 
   if (loading || !profile) {
     return (
@@ -151,10 +180,6 @@ export default function TeacherProfilePage() {
   return (
     <TeacherLayout>
       <div className="max-w-6xl mx-auto">
-        {/* =====================================================
-            HEADER
-        ===================================================== */}
-
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-slate-900">My Profile</h1>
 
@@ -163,20 +188,8 @@ export default function TeacherProfilePage() {
           </p>
         </div>
 
-        {/* =====================================================
-            ERROR
-        ===================================================== */}
-
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl p-4 mb-6">
-            {error}
-          </div>
-        )}
-
         <div className="grid lg:grid-cols-3 gap-8">
-          {/* ===================================================
-              PROFILE SUMMARY
-          =================================================== */}
+          {/* PROFILE SUMMARY */}
 
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <div className="flex flex-col items-center">
@@ -197,12 +210,51 @@ export default function TeacherProfilePage() {
               </h2>
 
               {profile.email && (
-                <p className="text-gray-500 text-sm mt-1">{profile.email}</p>
+                <p className="text-gray-500 text-sm mt-1 break-all text-center">
+                  {profile.email}
+                </p>
               )}
 
               <span className="mt-3 inline-flex px-4 py-1 rounded-full bg-emerald-100 text-emerald-700 text-sm font-semibold">
                 Teacher
               </span>
+
+              <div className="w-full mt-6">
+                <label
+                  htmlFor="teacher-profile-picture"
+                  className="block text-sm font-semibold mb-2"
+                >
+                  Profile Picture
+                </label>
+
+                <input
+                  id="teacher-profile-picture"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="w-full text-sm"
+                  onChange={(event) =>
+                    setSelectedFile(event.target.files?.[0] || null)
+                  }
+                />
+
+                <p className="text-xs text-gray-400 mt-2">
+                  JPEG, PNG or WebP. Maximum size: 5 MB.
+                </p>
+              </div>
+
+              {selectedFile && (
+                <p className="text-sm text-gray-500 mt-2 break-all w-full">
+                  Selected: {selectedFile.name}
+                </p>
+              )}
+
+              <button
+                onClick={uploadAvatar}
+                disabled={uploading || !selectedFile}
+                className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 disabled:bg-gray-400 text-white px-5 py-3 rounded-xl font-semibold"
+              >
+                {uploading ? "Uploading..." : "Upload Picture"}
+              </button>
             </div>
 
             <hr className="my-6" />
@@ -254,9 +306,7 @@ export default function TeacherProfilePage() {
             </div>
           </div>
 
-          {/* ===================================================
-              RIGHT SIDE
-          =================================================== */}
+          {/* RIGHT SIDE */}
 
           <div className="lg:col-span-2">
             <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -265,8 +315,6 @@ export default function TeacherProfilePage() {
               </h2>
 
               <div className="grid md:grid-cols-2 gap-5">
-                {/* First Name */}
-
                 <div>
                   <label className="block text-sm font-semibold mb-2">
                     First Name
@@ -274,15 +322,13 @@ export default function TeacherProfilePage() {
 
                   <input
                     type="text"
-                    className="border border-gray-300 rounded-xl p-3 w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.firstName}
                     onChange={(event) =>
                       updateField("firstName", event.target.value)
                     }
                   />
                 </div>
-
-                {/* Last Name */}
 
                 <div>
                   <label className="block text-sm font-semibold mb-2">
@@ -291,15 +337,13 @@ export default function TeacherProfilePage() {
 
                   <input
                     type="text"
-                    className="border border-gray-300 rounded-xl p-3 w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.lastName}
                     onChange={(event) =>
                       updateField("lastName", event.target.value)
                     }
                   />
                 </div>
-
-                {/* Email */}
 
                 <div>
                   <label className="block text-sm font-semibold mb-2">
@@ -318,8 +362,6 @@ export default function TeacherProfilePage() {
                   </p>
                 </div>
 
-                {/* Phone */}
-
                 <div>
                   <label className="block text-sm font-semibold mb-2">
                     Phone Number
@@ -327,7 +369,7 @@ export default function TeacherProfilePage() {
 
                   <input
                     type="tel"
-                    className="border border-gray-300 rounded-xl p-3 w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.phone}
                     onChange={(event) =>
                       updateField("phone", event.target.value)
@@ -336,8 +378,6 @@ export default function TeacherProfilePage() {
                   />
                 </div>
 
-                {/* School */}
-
                 <div>
                   <label className="block text-sm font-semibold mb-2">
                     School / Institution
@@ -345,7 +385,7 @@ export default function TeacherProfilePage() {
 
                   <input
                     type="text"
-                    className="border border-gray-300 rounded-xl p-3 w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.school}
                     onChange={(event) =>
                       updateField("school", event.target.value)
@@ -354,8 +394,6 @@ export default function TeacherProfilePage() {
                   />
                 </div>
 
-                {/* Class Level */}
-
                 <div>
                   <label className="block text-sm font-semibold mb-2">
                     Teaching Level
@@ -363,7 +401,7 @@ export default function TeacherProfilePage() {
 
                   <input
                     type="text"
-                    className="border border-gray-300 rounded-xl p-3 w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                    className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.classLevel}
                     onChange={(event) =>
                       updateField("classLevel", event.target.value)
@@ -373,8 +411,6 @@ export default function TeacherProfilePage() {
                 </div>
               </div>
 
-              {/* Biography */}
-
               <div className="mt-5">
                 <label className="block text-sm font-semibold mb-2">
                   Professional Biography
@@ -382,32 +418,12 @@ export default function TeacherProfilePage() {
 
                 <textarea
                   rows={6}
-                  className="border border-gray-300 rounded-xl p-3 w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                  className="border border-gray-300 rounded-xl p-3 w-full"
                   value={profile.bio}
                   onChange={(event) => updateField("bio", event.target.value)}
                   placeholder="Tell students about yourself, your teaching experience and areas of expertise."
                 />
               </div>
-
-              {/* Profile Image URL */}
-
-              <div className="mt-5">
-                <label className="block text-sm font-semibold mb-2">
-                  Profile Image URL
-                </label>
-
-                <input
-                  type="url"
-                  className="border border-gray-300 rounded-xl p-3 w-full focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
-                  value={profile.profileImage}
-                  onChange={(event) =>
-                    updateField("profileImage", event.target.value)
-                  }
-                  placeholder="https://example.com/profile.jpg"
-                />
-              </div>
-
-              {/* Save */}
 
               <button
                 onClick={updateProfile}

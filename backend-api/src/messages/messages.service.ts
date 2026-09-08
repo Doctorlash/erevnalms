@@ -17,11 +17,225 @@ export class MessagesService {
 
   /**
    * ============================================================
+   * INTERNAL AUTHORIZATION HELPERS
+   * ============================================================
+   */
+
+  private async getActiveUser(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: {
+        id: userId,
+      },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found.');
+    }
+
+    if (!user.isActive) {
+      throw new ForbiddenException('Your account is inactive.');
+    }
+
+    return user;
+  }
+
+  private async ensureConversationParticipant(
+    conversationId: string,
+    userId: string,
+  ) {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: {
+        id: conversationId,
+      },
+    });
+
+    if (!conversation) {
+      throw new NotFoundException('Conversation not found.');
+    }
+
+    const isParticipant =
+      conversation.participantOneId === userId ||
+      conversation.participantTwoId === userId;
+
+    if (!isParticipant) {
+      throw new ForbiddenException(
+        'You are not a participant in this conversation.',
+      );
+    }
+
+    return conversation;
+  }
+
+  /**
+   * Verify that two users have an existing messaging relationship.
+   *
+   * STUDENT:
+   * - teacher teaching an enrolled subject
+   * - student enrolled in at least one common subject
+   *
+   * TEACHER:
+   * - student enrolled in a subject taught by the teacher
+   * - another teacher teaching a shared subject
+   */
+  private async canUsersMessage(
+    userOneId: string,
+    userTwoId: string,
+  ): Promise<boolean> {
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: {
+          in: [userOneId, userTwoId],
+        },
+      },
+      select: {
+        id: true,
+        role: true,
+        isActive: true,
+      },
+    });
+
+    if (users.length !== 2 || users.some((user) => !user.isActive)) {
+      return false;
+    }
+
+    const userOne = users.find((user) => user.id === userOneId);
+    const userTwo = users.find((user) => user.id === userTwoId);
+
+    if (!userOne || !userTwo) {
+      return false;
+    }
+
+    /**
+     * Student <-> Teacher
+     */
+    if (
+      (userOne.role === 'STUDENT' && userTwo.role === 'TEACHER') ||
+      (userOne.role === 'TEACHER' && userTwo.role === 'STUDENT')
+    ) {
+      const studentId = userOne.role === 'STUDENT' ? userOneId : userTwoId;
+
+      const teacherId = userOne.role === 'TEACHER' ? userOneId : userTwoId;
+
+      const relationship = await this.prisma.enrollment.findFirst({
+        where: {
+          userId: studentId,
+          subject: {
+            teacherId,
+            isActive: true,
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      return !!relationship;
+    }
+
+    /**
+     * Student <-> Student
+     */
+    if (userOne.role === 'STUDENT' && userTwo.role === 'STUDENT') {
+      const commonSubject = await this.prisma.enrollment.findFirst({
+        where: {
+          userId: userOneId,
+          subject: {
+            isActive: true,
+            enrollments: {
+              some: {
+                userId: userTwoId,
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      return !!commonSubject;
+    }
+
+    /**
+     * Teacher <-> Teacher
+     */
+    if (userOne.role === 'TEACHER' && userTwo.role === 'TEACHER') {
+      const sharedSubject = await this.prisma.subject.findFirst({
+        where: {
+          isActive: true,
+          teacherId: userOneId,
+          teachingSubjects: {
+            some: {
+              teacherId: userTwoId,
+            },
+          },
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      if (sharedSubject) {
+        return true;
+      }
+
+      /**
+       * Fallback for schemas where teacherId is the only
+       * assignment relation: check whether the two teachers
+       * teach at least one subject in common through the
+       * subject assignments.
+       */
+      const userOneSubjects = await this.prisma.subject.findMany({
+        where: {
+          teacherId: userOneId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      const userOneSubjectIds = userOneSubjects.map((subject) => subject.id);
+
+      if (userOneSubjectIds.length === 0) {
+        return false;
+      }
+
+      const common = await this.prisma.subject.findFirst({
+        where: {
+          id: {
+            in: userOneSubjectIds,
+          },
+          teacherId: userTwoId,
+          isActive: true,
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      return !!common;
+    }
+
+    return false;
+  }
+
+  /**
+   * ============================================================
    * CREATE / GET CONVERSATION
    * ============================================================
    */
 
-  async createConversation(participantOneId: string, participantTwoId: string) {
+  async createConversation(
+    actorId: string,
+    participantOneId: string,
+    participantTwoId: string,
+  ) {
     if (!participantOneId || !participantTwoId) {
       throw new BadRequestException('Both participants are required.');
     }
@@ -31,6 +245,14 @@ export class MessagesService {
         'A user cannot have a conversation with themselves.',
       );
     }
+
+    if (actorId !== participantOneId && actorId !== participantTwoId) {
+      throw new ForbiddenException(
+        'You can only create a conversation involving your own account.',
+      );
+    }
+
+    await this.getActiveUser(actorId);
 
     const users = await this.prisma.user.findMany({
       where: {
@@ -53,6 +275,17 @@ export class MessagesService {
       throw new ForbiddenException('One or both participants are inactive.');
     }
 
+    const permitted = await this.canUsersMessage(
+      participantOneId,
+      participantTwoId,
+    );
+
+    if (!permitted) {
+      throw new ForbiddenException(
+        'These users are not permitted to start a conversation.',
+      );
+    }
+
     const existing = await this.prisma.conversation.findFirst({
       where: {
         OR: [
@@ -69,6 +302,16 @@ export class MessagesService {
     });
 
     if (existing) {
+      const isParticipant =
+        existing.participantOneId === actorId ||
+        existing.participantTwoId === actorId;
+
+      if (!isParticipant) {
+        throw new ForbiddenException(
+          'You are not a participant in this conversation.',
+        );
+      }
+
       return existing;
     }
 
@@ -107,6 +350,23 @@ export class MessagesService {
    */
 
   async startConversation(studentId: string, teacherId: string) {
+    const student = await this.prisma.user.findFirst({
+      where: {
+        id: studentId,
+        role: 'STUDENT',
+        isActive: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!student) {
+      throw new ForbiddenException(
+        'Only an active student can start a student-teacher conversation.',
+      );
+    }
+
     const teacher = await this.prisma.user.findFirst({
       where: {
         id: teacherId,
@@ -122,22 +382,7 @@ export class MessagesService {
       throw new NotFoundException('Teacher not found or inactive.');
     }
 
-    const student = await this.prisma.user.findFirst({
-      where: {
-        id: studentId,
-        role: 'STUDENT',
-        isActive: true,
-      },
-      select: {
-        id: true,
-      },
-    });
-
-    if (!student) {
-      throw new NotFoundException('Student not found or inactive.');
-    }
-
-    return this.createConversation(studentId, teacherId);
+    return this.createConversation(studentId, studentId, teacherId);
   }
 
   /**
@@ -155,25 +400,12 @@ export class MessagesService {
     fileType?: string,
     fileSize?: number,
   ) {
-    const conversation = await this.prisma.conversation.findUnique({
-      where: {
-        id: conversationId,
-      },
-    });
+    await this.getActiveUser(senderId);
 
-    if (!conversation) {
-      throw new NotFoundException('Conversation not found.');
-    }
-
-    const isParticipant =
-      conversation.participantOneId === senderId ||
-      conversation.participantTwoId === senderId;
-
-    if (!isParticipant) {
-      throw new ForbiddenException(
-        'You are not a participant in this conversation.',
-      );
-    }
+    const conversation = await this.ensureConversationParticipant(
+      conversationId,
+      senderId,
+    );
 
     if (!content?.trim() && !fileUrl) {
       throw new BadRequestException(
@@ -215,10 +447,7 @@ export class MessagesService {
       },
     });
 
-    /**
-     * Deliver message in real time.
-     */
-    this.gateway.sendMessage(conversationId, message);
+    this.gateway.sendMessage(conversation.id, message);
 
     return message;
   }
@@ -229,7 +458,9 @@ export class MessagesService {
    * ============================================================
    */
 
-  async getConversation(conversationId: string) {
+  async getConversation(conversationId: string, userId: string) {
+    await this.ensureConversationParticipant(conversationId, userId);
+
     const conversation = await this.prisma.conversation.findUnique({
       where: {
         id: conversationId,
@@ -303,6 +534,8 @@ export class MessagesService {
    */
 
   async getUserConversations(userId: string) {
+    await this.getActiveUser(userId);
+
     return this.prisma.conversation.findMany({
       where: {
         OR: [
@@ -359,6 +592,23 @@ export class MessagesService {
    */
 
   async teacherInbox(teacherId: string) {
+    const teacher = await this.prisma.user.findFirst({
+      where: {
+        id: teacherId,
+        role: 'TEACHER',
+        isActive: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (!teacher) {
+      throw new ForbiddenException(
+        'Only an active teacher can access the teacher inbox.',
+      );
+    }
+
     return this.prisma.conversation.findMany({
       where: {
         OR: [
@@ -413,6 +663,8 @@ export class MessagesService {
    */
 
   async searchConversations(userId: string, search: string) {
+    await this.getActiveUser(userId);
+
     const term = search.trim();
 
     if (!term) {
@@ -524,7 +776,7 @@ export class MessagesService {
    * ============================================================
    */
 
-  async markAsRead(messageId: string, userId?: string) {
+  async markAsRead(messageId: string, userId: string) {
     const message = await this.prisma.message.findUnique({
       where: {
         id: messageId,
@@ -538,7 +790,17 @@ export class MessagesService {
       throw new NotFoundException('Message not found.');
     }
 
-    if (userId && message.senderId === userId) {
+    const isParticipant =
+      message.conversation.participantOneId === userId ||
+      message.conversation.participantTwoId === userId;
+
+    if (!isParticipant) {
+      throw new ForbiddenException(
+        'You are not a participant in this conversation.',
+      );
+    }
+
+    if (message.senderId === userId) {
       throw new BadRequestException(
         'You cannot mark your own message as read.',
       );
@@ -553,10 +815,6 @@ export class MessagesService {
       },
     });
 
-    /**
-     * Notify everyone in the conversation
-     * that this message has been read.
-     */
     this.gateway.server.to(message.conversationId).emit('messageRead', {
       messageId,
       userId,
@@ -572,6 +830,8 @@ export class MessagesService {
    */
 
   async unreadCount(userId: string) {
+    await this.getActiveUser(userId);
+
     const unread = await this.prisma.message.count({
       where: {
         isRead: false,
@@ -638,31 +898,10 @@ export class MessagesService {
    * ============================================================
    * MESSAGE CONTACTS
    * ============================================================
-   *
-   * Returns users relevant to the logged-in user's subjects/classes.
-   *
-   * STUDENT:
-   * - Teachers teaching subjects the student is enrolled in
-   * - Other students enrolled in those same subjects
-   *
-   * TEACHER:
-   * - Students enrolled in subjects taught by the teacher
-   * - Other teachers teaching the same subjects
    */
-  async getMessageContacts(userId: string) {
-    const currentUser = await this.prisma.user.findUnique({
-      where: {
-        id: userId,
-      },
-      select: {
-        id: true,
-        role: true,
-      },
-    });
 
-    if (!currentUser) {
-      throw new NotFoundException('User not found.');
-    }
+  async getMessageContacts(userId: string) {
+    const currentUser = await this.getActiveUser(userId);
 
     if (currentUser.role === 'STUDENT') {
       const enrollments = await this.prisma.enrollment.findMany({
@@ -879,6 +1118,7 @@ export class MessagesService {
       students: [],
     };
   }
+
   /**
    * ============================================================
    * MESSAGE REACTIONS

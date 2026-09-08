@@ -5,14 +5,20 @@ import {
   Param,
   Patch,
   Post,
+  Req,
   UploadedFile,
+  UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
+
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
 import { MessagesService } from './messages.service';
 
 @Controller('messages')
+@UseGuards(JwtAuthGuard)
 export class MessagesController {
   constructor(private readonly service: MessagesService) {}
 
@@ -20,10 +26,14 @@ export class MessagesController {
    * ============================================================
    * CREATE CONVERSATION
    * ============================================================
+   *
+   * The authenticated user must be one of the participants.
+   * The service also verifies that the two users are permitted
+   * to communicate based on the existing messaging relationship.
    */
-
   @Post('conversation')
   createConversation(
+    @Req() req: any,
     @Body()
     body: {
       participantOneId: string;
@@ -31,6 +41,7 @@ export class MessagesController {
     },
   ) {
     return this.service.createConversation(
+      req.user.id,
       body.participantOneId,
       body.participantTwoId,
     );
@@ -40,31 +51,35 @@ export class MessagesController {
    * ============================================================
    * START STUDENT -> TEACHER CONVERSATION
    * ============================================================
+   *
+   * The student ID is taken from JWT.
+   * A client cannot start a conversation pretending to be
+   * another student.
    */
-
   @Post('start')
   startConversation(
+    @Req() req: any,
     @Body()
     body: {
-      studentId: string;
       teacherId: string;
     },
   ) {
-    return this.service.startConversation(body.studentId, body.teacherId);
+    return this.service.startConversation(req.user.id, body.teacherId);
   }
 
   /**
    * ============================================================
    * SEND MESSAGE
    * ============================================================
+   *
+   * senderId is deliberately NOT accepted from the client.
    */
-
   @Post('send')
   send(
+    @Req() req: any,
     @Body()
     body: {
       conversationId: string;
-      senderId: string;
       content?: string;
       fileUrl?: string;
       fileName?: string;
@@ -74,7 +89,7 @@ export class MessagesController {
   ) {
     return this.service.sendMessage(
       body.conversationId,
-      body.senderId,
+      req.user.id,
       body.content ?? '',
       body.fileUrl,
       body.fileName,
@@ -85,68 +100,53 @@ export class MessagesController {
 
   /**
    * ============================================================
-   * GET CONVERSATION
+   * SINGLE CONVERSATION
    * ============================================================
    */
-
   @Get('conversation/:id')
-  conversation(@Param('id') id: string) {
-    return this.service.getConversation(id);
+  conversation(@Req() req: any, @Param('id') id: string) {
+    return this.service.getConversation(id, req.user.id);
   }
 
   /**
    * ============================================================
-   * MESSAGE CONTACTS
+   * USER CONVERSATIONS
    * ============================================================
+   *
+   * userId is taken from JWT rather than URL.
    */
-
-  @Get('contacts/:userId')
-  messageContacts(@Param('userId') userId: string) {
-    return this.service.getMessageContacts(userId);
+  @Get('user')
+  userConversations(@Req() req: any) {
+    return this.service.getUserConversations(req.user.id);
   }
 
   /**
    * ============================================================
-   * GET USER CONVERSATIONS
+   * SEARCH CONVERSATIONS
    * ============================================================
    */
-
-  @Get('user/:userId')
-  userConversations(@Param('userId') userId: string) {
-    return this.service.getUserConversations(userId);
-  }
-
-  /**
-   * ============================================================
-   * SEARCH USER CONVERSATIONS
-   * ============================================================
-   */
-
-  @Get('search/:userId/:search')
-  searchConversations(
-    @Param('userId') userId: string,
-    @Param('search') search: string,
-  ) {
-    return this.service.searchConversations(userId, search);
+  @Get('search/:search')
+  searchConversations(@Req() req: any, @Param('search') search: string) {
+    return this.service.searchConversations(req.user.id, search);
   }
 
   /**
    * ============================================================
    * TEACHER INBOX
    * ============================================================
+   *
+   * The teacher identity comes from JWT.
    */
-
-  @Get('teacher/:teacherId')
-  teacherInbox(@Param('teacherId') teacherId: string) {
-    return this.service.teacherInbox(teacherId);
+  @Get('teacher')
+  teacherInbox(@Req() req: any) {
+    return this.service.teacherInbox(req.user.id);
   }
 
   /**
    * ============================================================
-   * GET ALL TEACHERS
+   * TEACHERS
    * ============================================================
    */
-
   @Get('teachers')
   teachers() {
     return this.service.getTeachers();
@@ -154,30 +154,34 @@ export class MessagesController {
 
   /**
    * ============================================================
-   * MARK MESSAGE AS READ
+   * MESSAGE CONTACTS
    * ============================================================
    */
-
-  @Patch(':messageId/read')
-  markAsRead(
-    @Param('messageId') messageId: string,
-    @Body()
-    body?: {
-      userId?: string;
-    },
-  ) {
-    return this.service.markAsRead(messageId, body?.userId);
+  @Get('contacts')
+  messageContacts(@Req() req: any) {
+    return this.service.getMessageContacts(req.user.id);
   }
 
   /**
    * ============================================================
-   * UNREAD MESSAGE COUNT
+   * MARK AS READ
+   * ============================================================
+   *
+   * The reader is always the authenticated user.
+   */
+  @Patch(':messageId/read')
+  markAsRead(@Req() req: any, @Param('messageId') messageId: string) {
+    return this.service.markAsRead(messageId, req.user.id);
+  }
+
+  /**
+   * ============================================================
+   * UNREAD COUNT
    * ============================================================
    */
-
-  @Get('user/:userId/unread')
-  unreadCount(@Param('userId') userId: string) {
-    return this.service.unreadCount(userId);
+  @Get('unread')
+  unreadCount(@Req() req: any) {
+    return this.service.unreadCount(req.user.id);
   }
 
   /**
@@ -185,7 +189,6 @@ export class MessagesController {
    * FILE UPLOAD
    * ============================================================
    */
-
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {
@@ -195,10 +198,7 @@ export class MessagesController {
       },
     }),
   )
-  upload(
-    @UploadedFile()
-    file: Express.Multer.File,
-  ) {
+  upload(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
       return {
         success: false,
@@ -219,17 +219,18 @@ export class MessagesController {
    * ============================================================
    * MESSAGE REACTION
    * ============================================================
+   *
+   * userId is deliberately NOT accepted from the client.
    */
-
   @Post('reaction')
   reaction(
+    @Req() req: any,
     @Body()
     body: {
       messageId: string;
-      userId: string;
       emoji: string;
     },
   ) {
-    return this.service.toggleReaction(body.messageId, body.userId, body.emoji);
+    return this.service.toggleReaction(body.messageId, req.user.id, body.emoji);
   }
 }

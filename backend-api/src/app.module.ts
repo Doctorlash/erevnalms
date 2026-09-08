@@ -12,6 +12,7 @@ import { DashboardModule } from './dashboard/dashboard.module';
 import { QuestionsModule } from './questions/questions.module';
 import { MailModule } from './mail/mail.module';
 import { ExamsModule } from './exams/exams.module';
+import { TeacherApplicationsModule } from './teacher-applications/teacher-applications.module';
 import { ExamAttemptsModule } from './exam-attempts/exam-attempts.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { SubscriptionsModule } from './subscriptions/subscriptions.module';
@@ -32,6 +33,8 @@ import { PresenceModule } from './presence/presence.module';
 import { ProfileModule } from './profile/profile.module';
 import { ContactModule } from './contact/contact.module';
 import { ResourcesModule } from './resources/resources.module';
+import { SubjectRequestsService } from './subject-requests/subject-requests.service';
+import { SubjectRequestsModule } from './subject-requests/subject-requests.module';
 
 @Module({
   imports: [
@@ -45,6 +48,7 @@ import { ResourcesModule } from './resources/resources.module';
     ProgressModule,
     DashboardModule,
     QuestionsModule,
+    TeacherApplicationsModule,
     ExamsModule,
     ExamAttemptsModule,
     AnalyticsModule,
@@ -67,6 +71,8 @@ import { ResourcesModule } from './resources/resources.module';
     MailModule,
     ContactModule,
     ResourcesModule,
+    SubjectRequestsModule,
   ],
+  providers: [SubjectRequestsService],
 })
 export class AppModule {}

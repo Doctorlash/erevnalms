@@ -24,12 +24,10 @@ export class LessonsController {
   constructor(private readonly lessonsService: LessonsService) {}
 
   /**
+   * ============================================================
    * TEACHER
-   *
-   * Create a new lesson.
-   *
-   * The lesson is created as DRAFT.
-   * The authenticated teacher becomes the creator.
+   * CREATE LESSON
+   * ============================================================
    */
   @Post()
   @Roles('TEACHER')
@@ -38,26 +36,31 @@ export class LessonsController {
   }
 
   /**
-   * AUTHENTICATED USERS
+   * ============================================================
+   * STUDENT
+   * GET AVAILABLE LESSONS
+   * ============================================================
    *
-   * Get lessons available to students.
+   * The service only returns lessons belonging to subjects
+   * for which this student currently has active access.
    *
-   * The service only returns lessons that are:
-   * - APPROVED
-   * - Published
+   * FREE:
+   * - expiresAt must be in the future
+   *
+   * PAID:
+   * - active enrollment is required
    */
   @Get()
-  findAll() {
-    return this.lessonsService.findAll();
+  @Roles('STUDENT')
+  findAll(@CurrentUser() user: AuthenticatedUser) {
+    return this.lessonsService.findAll(user.id);
   }
 
   /**
+   * ============================================================
    * ADMIN
-   *
-   * Get lessons currently waiting for approval.
-   *
-   * This endpoint is used by the Admin Lesson
-   * Management / Approval page.
+   * GET PENDING LESSONS
+   * ============================================================
    */
   @Get('admin/pending')
   @Roles('ADMIN')
@@ -66,16 +69,10 @@ export class LessonsController {
   }
 
   /**
+   * ============================================================
    * TEACHER
-   *
-   * Get all lessons belonging to the authenticated
-   * teacher's assigned subjects.
-   *
-   * Includes:
-   * - DRAFT
-   * - PENDING_APPROVAL
-   * - APPROVED
-   * - REJECTED
+   * GET TEACHER'S LESSONS
+   * ============================================================
    */
   @Get('teacher')
   @Roles('TEACHER')
@@ -84,20 +81,28 @@ export class LessonsController {
   }
 
   /**
-   * AUTHENTICATED USERS
+   * ============================================================
+   * STUDENT
+   * GET LESSONS BY TOPIC
+   * ============================================================
    *
-   * Get published lessons belonging to a topic.
+   * The service verifies that the student has active access
+   * to the subject before returning any lessons.
    */
   @Get('topic/:topicId')
-  findByTopic(@Param('topicId') topicId: string) {
-    return this.lessonsService.findByTopic(topicId);
+  @Roles('STUDENT')
+  findByTopic(
+    @Param('topicId') topicId: string,
+    @CurrentUser() user: AuthenticatedUser,
+  ) {
+    return this.lessonsService.findByTopic(topicId, user.id);
   }
 
   /**
+   * ============================================================
    * TEACHER
-   *
-   * Submit a DRAFT or REJECTED lesson
-   * for administrator approval.
+   * SUBMIT LESSON FOR APPROVAL
+   * ============================================================
    */
   @Patch(':id/submit')
   @Roles('TEACHER')
@@ -109,15 +114,10 @@ export class LessonsController {
   }
 
   /**
+   * ============================================================
    * ADMIN
-   *
-   * Approve a lesson.
-   *
-   * The service changes:
-   * - status -> APPROVED
-   * - isPublished -> true
-   * - approvedAt -> current date/time
-   * - approvedById -> authenticated admin
+   * APPROVE LESSON
+   * ============================================================
    */
   @Patch(':id/approve')
   @Roles('ADMIN')
@@ -126,15 +126,10 @@ export class LessonsController {
   }
 
   /**
+   * ============================================================
    * ADMIN
-   *
-   * Reject a lesson.
-   *
-   * Expected request body:
-   *
-   * {
-   *   "reason": "Please improve the explanation..."
-   * }
+   * REJECT LESSON
+   * ============================================================
    */
   @Patch(':id/reject')
   @Roles('ADMIN')
@@ -143,19 +138,28 @@ export class LessonsController {
   }
 
   /**
-   * AUTHENTICATED USERS
+   * ============================================================
+   * STUDENT
+   * GET ONE LESSON
+   * ============================================================
    *
-   * Get one approved and published lesson.
+   * The service verifies:
+   * - lesson is APPROVED
+   * - lesson is published
+   * - student has active enrollment
+   * - FREE enrollment has not expired
    */
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.lessonsService.findOne(id);
+  @Roles('STUDENT')
+  findOne(@Param('id') id: string, @CurrentUser() user: AuthenticatedUser) {
+    return this.lessonsService.findOne(id, user.id);
   }
 
   /**
+   * ============================================================
    * ADMIN
-   *
-   * Permanently delete a lesson.
+   * DELETE LESSON
+   * ============================================================
    */
   @Delete(':id')
   @Roles('ADMIN')

@@ -5,6 +5,8 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
+import { EnrollmentType } from '@prisma/client';
+
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 
@@ -12,19 +14,61 @@ import { CreateLessonDto } from './dto/create-lesson.dto';
 export class LessonsService {
   constructor(private prisma: PrismaService) {}
 
+  // ============================================================
+  // HELPER
+  // CHECK ACTIVE SUBJECT ACCESS
+  // ============================================================
+
+  private async requireActiveEnrollment(userId: string, subjectId: string) {
+    const now = new Date();
+
+    const enrollment = await this.prisma.enrollment.findUnique({
+      where: {
+        userId_subjectId: {
+          userId,
+          subjectId,
+        },
+      },
+    });
+
+    if (!enrollment) {
+      throw new ForbiddenException('You are not enrolled in this subject.');
+    }
+
+    // ----------------------------------------------------------
+    // PAID ACCESS
+    // ----------------------------------------------------------
+
+    if (enrollment.type === EnrollmentType.PAID) {
+      return enrollment;
+    }
+
+    // ----------------------------------------------------------
+    // FREE ACCESS
+    // ----------------------------------------------------------
+
+    if (enrollment.type === EnrollmentType.FREE) {
+      if (!enrollment.expiresAt || enrollment.expiresAt <= now) {
+        throw new ForbiddenException(
+          'Your free access to this subject has expired. Please subscribe or make payment to continue.',
+        );
+      }
+
+      return enrollment;
+    }
+
+    throw new ForbiddenException(
+      'You do not currently have active access to this subject.',
+    );
+  }
+
   /**
    * ============================================================
    * TEACHER
    * CREATE LESSON
    * ============================================================
-   *
-   * Creates a new lesson as DRAFT.
-   *
-   * The teacher:
-   * - Must own the subject
-   * - Must own the subject to which the topic belongs
-   * - Cannot publish the lesson directly
    */
+
   async create(data: CreateLessonDto, teacherId: string) {
     const topic = await this.prisma.topic.findUnique({
       where: {
@@ -59,14 +103,8 @@ export class LessonsService {
         description: data.description,
         videoUrl: data.videoUrl,
         duration: data.duration,
-
-        // Teacher who created the lesson
         createdById: teacherId,
-
-        // Automatically inherit the subject from the topic
         subjectId: topic.subjectId,
-
-        // New lessons always begin as drafts
         status: 'DRAFT',
         isPublished: false,
       },
@@ -92,20 +130,50 @@ export class LessonsService {
 
   /**
    * ============================================================
-   * STUDENTS / AUTHENTICATED USERS
+   * STUDENT
    * GET ALL PUBLISHED LESSONS
    * ============================================================
    *
-   * Students should only see:
-   *
-   * status = APPROVED
-   * isPublished = true
+   * Only lessons belonging to subjects for which the student
+   * has active access are returned.
    */
-  async findAll() {
+
+  async findAll(userId: string) {
+    const now = new Date();
+
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        userId,
+        OR: [
+          {
+            type: EnrollmentType.PAID,
+          },
+          {
+            type: EnrollmentType.FREE,
+            expiresAt: {
+              gt: now,
+            },
+          },
+        ],
+      },
+      select: {
+        subjectId: true,
+      },
+    });
+
+    const subjectIds = enrollments.map((enrollment) => enrollment.subjectId);
+
+    if (subjectIds.length === 0) {
+      return [];
+    }
+
     return this.prisma.lesson.findMany({
       where: {
         status: 'APPROVED',
         isPublished: true,
+        subjectId: {
+          in: subjectIds,
+        },
       },
 
       include: {
@@ -143,23 +211,8 @@ export class LessonsService {
    * ADMIN
    * GET PENDING LESSONS
    * ============================================================
-   *
-   * Used by:
-   *
-   * GET /lessons/admin/pending
-   *
-   * Returns only lessons waiting for administrator approval.
-   *
-   * Includes:
-   * - Full lesson content
-   * - Description
-   * - Video URL
-   * - Duration
-   * - Teacher
-   * - Subject
-   * - Topic
-   * - Submission/creation dates
    */
+
   async adminPendingLessons() {
     return this.prisma.lesson.findMany({
       where: {
@@ -191,13 +244,29 @@ export class LessonsService {
 
   /**
    * ============================================================
-   * AUTHENTICATED USERS
+   * STUDENT
    * GET LESSONS BY TOPIC
    * ============================================================
-   *
-   * Only approved and published lessons are returned.
    */
-  async findByTopic(topicId: string) {
+
+  async findByTopic(topicId: string, userId: string) {
+    const topic = await this.prisma.topic.findUnique({
+      where: {
+        id: topicId,
+      },
+      select: {
+        id: true,
+        subjectId: true,
+      },
+    });
+
+    if (!topic) {
+      throw new NotFoundException('Topic not found');
+    }
+
+    // Check active enrollment before returning lessons.
+    await this.requireActiveEnrollment(userId, topic.subjectId);
+
     return this.prisma.lesson.findMany({
       where: {
         topicId,
@@ -232,16 +301,8 @@ export class LessonsService {
    * TEACHER
    * GET TEACHER'S LESSONS
    * ============================================================
-   *
-   * Returns lessons belonging to subjects assigned
-   * to the authenticated teacher.
-   *
-   * Includes:
-   * - DRAFT
-   * - PENDING_APPROVAL
-   * - APPROVED
-   * - REJECTED
    */
+
   async teacherLessons(teacherId: string) {
     return this.prisma.lesson.findMany({
       where: {
@@ -289,13 +350,8 @@ export class LessonsService {
    * TEACHER
    * SUBMIT LESSON FOR APPROVAL
    * ============================================================
-   *
-   * A teacher can submit:
-   *
-   * DRAFT -> PENDING_APPROVAL
-   *
-   * REJECTED -> PENDING_APPROVAL
    */
+
   async submitForApproval(id: string, teacherId: string) {
     const lesson = await this.prisma.lesson.findUnique({
       where: {
@@ -368,15 +424,8 @@ export class LessonsService {
    * ADMIN
    * APPROVE LESSON
    * ============================================================
-   *
-   * PENDING_APPROVAL -> APPROVED
-   *
-   * Once approved:
-   * - isPublished = true
-   * - approvedAt is recorded
-   * - approvedById is recorded
-   * - rejectionReason is cleared
    */
+
   async approve(id: string, adminId: string) {
     const lesson = await this.prisma.lesson.findUnique({
       where: {
@@ -440,11 +489,8 @@ export class LessonsService {
    * ADMIN
    * REJECT LESSON
    * ============================================================
-   *
-   * PENDING_APPROVAL -> REJECTED
-   *
-   * Rejected lessons are not published.
    */
+
   async reject(id: string, reason?: string) {
     const lesson = await this.prisma.lesson.findUnique({
       where: {
@@ -499,14 +545,12 @@ export class LessonsService {
 
   /**
    * ============================================================
-   * AUTHENTICATED USERS
+   * STUDENT
    * GET ONE PUBLISHED LESSON
    * ============================================================
-   *
-   * Students cannot retrieve drafts, rejected lessons,
-   * or pending lessons through this endpoint.
    */
-  async findOne(id: string) {
+
+  async findOne(id: string, userId: string) {
     const lesson = await this.prisma.lesson.findFirst({
       where: {
         id,
@@ -543,6 +587,13 @@ export class LessonsService {
       throw new NotFoundException('Lesson not found');
     }
 
+    // Check active enrollment before returning content.
+    if (!lesson.subjectId) {
+      throw new ForbiddenException('This lesson is not linked to a subject.');
+    }
+
+    await this.requireActiveEnrollment(userId, lesson.subjectId);
+
     return lesson;
   }
 
@@ -552,6 +603,7 @@ export class LessonsService {
    * DELETE LESSON
    * ============================================================
    */
+
   async delete(id: string) {
     const lesson = await this.prisma.lesson.findUnique({
       where: {

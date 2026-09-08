@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   ConnectedSocket,
   MessageBody,
@@ -8,13 +9,29 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 
+import { Injectable } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+
 import { Server, Socket } from 'socket.io';
+
+import { PrismaService } from '../prisma/prisma.service';
+
+interface AuthenticatedSocket extends Socket {
+  userId?: string;
+}
+
+interface JwtPayload {
+  sub: string;
+  email?: string;
+  role?: string;
+}
 
 @WebSocketGateway({
   cors: {
     origin: '*',
   },
 })
+@Injectable()
 export class MessagesGateway
   implements OnGatewayConnection, OnGatewayDisconnect
 {
@@ -22,7 +39,7 @@ export class MessagesGateway
   server: Server;
 
   /**
-   * socketId -> userId
+   * socketId -> authenticated userId
    */
   private connectedUsers = new Map<string, string>();
 
@@ -38,14 +55,133 @@ export class MessagesGateway
    */
   private lastSeen = new Map<string, Date>();
 
+  constructor(
+    private readonly jwtService: JwtService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  /**
+   * ============================================================
+   * AUTHENTICATION
+   * ============================================================
+   */
+
+  private extractToken(client: Socket): string | null {
+    /**
+     * Preferred Socket.IO format:
+     *
+     * io(url, {
+     *   auth: {
+     *     token: 'JWT'
+     *   }
+     * })
+     */
+    const authToken = client.handshake.auth?.token;
+
+    if (typeof authToken === 'string' && authToken.trim()) {
+      return authToken.replace(/^Bearer\s+/i, '').trim();
+    }
+
+    /**
+     * Also support:
+     *
+     * extraHeaders:
+     * {
+     *   Authorization: 'Bearer JWT'
+     * }
+     */
+    const authorization = client.handshake.headers?.authorization;
+
+    if (typeof authorization === 'string' && authorization.trim()) {
+      return authorization.replace(/^Bearer\s+/i, '').trim();
+    }
+
+    return null;
+  }
+
+  private async authenticateSocket(
+    client: AuthenticatedSocket,
+  ): Promise<string | null> {
+    const token = this.extractToken(client);
+
+    if (!token) {
+      return null;
+    }
+
+    try {
+      const payload = await this.jwtService.verifyAsync<JwtPayload>(token);
+
+      if (!payload?.sub) {
+        return null;
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: {
+          id: payload.sub,
+        },
+        select: {
+          id: true,
+          isActive: true,
+          role: true,
+        },
+      });
+
+      if (!user || !user.isActive) {
+        return null;
+      }
+
+      client.userId = user.id;
+
+      return user.id;
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * ============================================================
    * CONNECTION
    * ============================================================
    */
 
-  handleConnection(client: Socket) {
-    console.log(`Socket connected: ${client.id}`);
+  async handleConnection(client: AuthenticatedSocket) {
+    const userId = await this.authenticateSocket(client);
+
+    if (!userId) {
+      console.warn(`Rejected unauthenticated socket: ${client.id}`);
+
+      client.emit('authenticationError', {
+        success: false,
+        message: 'Authentication required.',
+      });
+
+      client.disconnect(true);
+
+      return;
+    }
+
+    this.connectedUsers.set(client.id, userId);
+
+    let sockets = this.userSockets.get(userId);
+
+    const wasOffline = !sockets || sockets.size === 0;
+
+    if (!sockets) {
+      sockets = new Set<string>();
+      this.userSockets.set(userId, sockets);
+    }
+
+    sockets.add(client.id);
+
+    if (wasOffline) {
+      this.lastSeen.delete(userId);
+
+      this.server.emit('userOnline', {
+        userId,
+      });
+    }
+
+    console.log(`Socket authenticated: ${client.id} (user: ${userId})`);
   }
 
   /**
@@ -54,7 +190,7 @@ export class MessagesGateway
    * ============================================================
    */
 
-  handleDisconnect(client: Socket) {
+  handleDisconnect(client: AuthenticatedSocket) {
     const userId = this.connectedUsers.get(client.id);
 
     if (!userId) {
@@ -92,50 +228,67 @@ export class MessagesGateway
 
   /**
    * ============================================================
-   * REGISTER USER
+   * AUTHENTICATED USER
    * ============================================================
    */
 
+  private getAuthenticatedUser(client: AuthenticatedSocket): string | null {
+    return this.connectedUsers.get(client.id) || null;
+  }
+
+  /**
+   * ============================================================
+   * CONVERSATION MEMBERSHIP
+   * ============================================================
+   */
+
+  private async isConversationParticipant(
+    conversationId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const conversation = await this.prisma.conversation.findUnique({
+      where: {
+        id: conversationId,
+      },
+      select: {
+        participantOneId: true,
+        participantTwoId: true,
+      },
+    });
+
+    if (!conversation) {
+      return false;
+    }
+
+    return (
+      conversation.participantOneId === userId ||
+      conversation.participantTwoId === userId
+    );
+  }
+
+  /**
+   * ============================================================
+   * REGISTER USER
+   * ============================================================
+   *
+   * Kept for compatibility with the existing frontend.
+   *
+   * IMPORTANT:
+   * The client-provided userId is ignored.
+   * The identity comes from the authenticated JWT.
+   */
   @SubscribeMessage('register')
   registerUser(
-    @MessageBody() userId: string,
-    @ConnectedSocket() client: Socket,
+    @MessageBody() _requestedUserId: string,
+    @ConnectedSocket() client: AuthenticatedSocket,
   ) {
+    const userId = this.getAuthenticatedUser(client);
+
     if (!userId) {
       return {
         success: false,
-        message: 'User ID is required.',
+        message: 'Socket is not authenticated.',
       };
-    }
-
-    /**
-     * Associate socket with user.
-     */
-    this.connectedUsers.set(client.id, userId);
-
-    /**
-     * Support multiple sockets per user.
-     */
-    let sockets = this.userSockets.get(userId);
-
-    const wasOffline = !sockets || sockets.size === 0;
-
-    if (!sockets) {
-      sockets = new Set<string>();
-      this.userSockets.set(userId, sockets);
-    }
-
-    sockets.add(client.id);
-
-    /**
-     * User is online again.
-     */
-    if (wasOffline) {
-      this.lastSeen.delete(userId);
-
-      this.server.emit('userOnline', {
-        userId,
-      });
     }
 
     return {
@@ -151,7 +304,16 @@ export class MessagesGateway
    */
 
   @SubscribeMessage('onlineUsers')
-  getOnlineUsers() {
+  getOnlineUsers(@ConnectedSocket() client: AuthenticatedSocket) {
+    const userId = this.getAuthenticatedUser(client);
+
+    if (!userId) {
+      return {
+        success: false,
+        message: 'Socket is not authenticated.',
+      };
+    }
+
     return {
       users: [...this.userSockets.keys()],
     };
@@ -164,10 +326,19 @@ export class MessagesGateway
    */
 
   @SubscribeMessage('join')
-  handleJoin(
+  async handleJoin(
     @MessageBody() conversationId: string,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
   ) {
+    const userId = this.getAuthenticatedUser(client);
+
+    if (!userId) {
+      return {
+        success: false,
+        message: 'Socket is not authenticated.',
+      };
+    }
+
     if (!conversationId) {
       return {
         success: false,
@@ -175,7 +346,19 @@ export class MessagesGateway
       };
     }
 
-    client.join(conversationId);
+    const isParticipant = await this.isConversationParticipant(
+      conversationId,
+      userId,
+    );
+
+    if (!isParticipant) {
+      return {
+        success: false,
+        message: 'You are not a participant in this conversation.',
+      };
+    }
+
+    await client.join(conversationId);
 
     return {
       success: true,
@@ -190,10 +373,19 @@ export class MessagesGateway
    */
 
   @SubscribeMessage('leave')
-  handleLeave(
+  async handleLeave(
     @MessageBody() conversationId: string,
-    @ConnectedSocket() client: Socket,
+    @ConnectedSocket() client: AuthenticatedSocket,
   ) {
+    const userId = this.getAuthenticatedUser(client);
+
+    if (!userId) {
+      return {
+        success: false,
+        message: 'Socket is not authenticated.',
+      };
+    }
+
     if (!conversationId) {
       return {
         success: false,
@@ -201,7 +393,19 @@ export class MessagesGateway
       };
     }
 
-    client.leave(conversationId);
+    const isParticipant = await this.isConversationParticipant(
+      conversationId,
+      userId,
+    );
+
+    if (!isParticipant) {
+      return {
+        success: false,
+        message: 'You are not a participant in this conversation.',
+      };
+    }
+
+    await client.leave(conversationId);
 
     return {
       success: true,
@@ -216,29 +420,49 @@ export class MessagesGateway
    */
 
   @SubscribeMessage('typing')
-  handleTyping(
+  async handleTyping(
     @MessageBody()
     data: {
       conversationId: string;
-      senderId: string;
     },
+    @ConnectedSocket() client: AuthenticatedSocket,
   ) {
-    if (!data?.conversationId || !data?.senderId) {
+    const userId = this.getAuthenticatedUser(client);
+
+    if (!userId) {
       return;
     }
+
+    if (!data?.conversationId) {
+      return;
+    }
+
+    const isParticipant = await this.isConversationParticipant(
+      data.conversationId,
+      userId,
+    );
+
+    if (!isParticipant) {
+      return;
+    }
+
+    const senderSocketId = this.getSocketId(userId);
+
+    const typingData = {
+      conversationId: data.conversationId,
+      senderId: userId,
+    };
 
     /**
      * Do not send the typing event back to the sender.
      */
-    const senderSocketId = this.getSocketId(data.senderId);
-
     if (senderSocketId) {
       this.server
         .to(data.conversationId)
         .except(senderSocketId)
-        .emit('typing', data);
+        .emit('typing', typingData);
     } else {
-      this.server.to(data.conversationId).emit('typing', data);
+      this.server.to(data.conversationId).emit('typing', typingData);
     }
   }
 
@@ -246,8 +470,10 @@ export class MessagesGateway
    * ============================================================
    * BROADCAST NEW MESSAGE
    * ============================================================
+   *
+   * This method is called by MessagesService after the REST
+   * authorization checks have succeeded.
    */
-
   sendMessage(conversationId: string, message: any) {
     this.server.to(conversationId).emit('newMessage', message);
   }

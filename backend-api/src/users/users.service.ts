@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-unsafe-assignment */
+
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -6,6 +7,9 @@ import { PrismaService } from '../prisma/prisma.service';
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
+  /**
+   * Create a user.
+   */
   async create(data: {
     firstName: string;
     lastName: string;
@@ -20,24 +24,37 @@ export class UsersService {
         lastName: data.lastName,
         email: data.email,
         password: data.password,
-
         role: data.role ?? 'STUDENT',
-
         isActive: data.isActive ?? true,
       },
     });
   }
+
+  /**
+   * Find user by email.
+   */
   async findByEmail(email: string) {
     return this.prisma.user.findUnique({
-      where: { email },
+      where: {
+        email,
+      },
     });
   }
 
+  /**
+   * Find user by ID.
+   */
   async findById(id: string) {
     return this.prisma.user.findUnique({
-      where: { id },
+      where: {
+        id,
+      },
     });
   }
+
+  /**
+   * Update authenticated user's profile.
+   */
   async updateProfile(
     id: string,
     data: {
@@ -54,10 +71,13 @@ export class UsersService {
       where: {
         id,
       },
-
       data,
     });
   }
+
+  /**
+   * Update user's password.
+   */
   async updatePassword(id: string, hashedPassword: string) {
     return this.prisma.user.update({
       where: {
@@ -68,6 +88,10 @@ export class UsersService {
       },
     });
   }
+
+  /**
+   * Get all users.
+   */
   async findAll() {
     return this.prisma.user.findMany({
       orderBy: {
@@ -76,6 +100,9 @@ export class UsersService {
     });
   }
 
+  /**
+   * Get all teachers.
+   */
   async getTeachers() {
     return this.prisma.user.findMany({
       where: {
@@ -84,6 +111,9 @@ export class UsersService {
     });
   }
 
+  /**
+   * Get all students.
+   */
   async getStudents() {
     return this.prisma.user.findMany({
       where: {
@@ -92,31 +122,51 @@ export class UsersService {
     });
   }
 
+  /**
+   * Update user role.
+   */
   async updateRole(id: string, role: any) {
     return this.prisma.user.update({
-      where: { id },
-      data: { role },
+      where: {
+        id,
+      },
+      data: {
+        role,
+      },
     });
   }
 
+  /**
+   * Deactivate user.
+   */
   async deactivate(id: string) {
     return this.prisma.user.update({
-      where: { id },
+      where: {
+        id,
+      },
       data: {
         isActive: false,
       },
     });
   }
 
+  /**
+   * Activate user.
+   */
   async activate(id: string) {
     return this.prisma.user.update({
-      where: { id },
+      where: {
+        id,
+      },
       data: {
         isActive: true,
       },
     });
   }
 
+  /**
+   * Get platform user statistics.
+   */
   async getStats() {
     const totalUsers = await this.prisma.user.count();
 
@@ -145,6 +195,10 @@ export class UsersService {
       admins,
     };
   }
+
+  /**
+   * Store a password reset token.
+   */
   async setPasswordResetToken(userId: string, token: string, expires: Date) {
     return this.prisma.user.update({
       where: {
@@ -156,6 +210,10 @@ export class UsersService {
       },
     });
   }
+
+  /**
+   * Find a user using a password reset token.
+   */
   async findByResetPasswordToken(token: string) {
     return this.prisma.user.findFirst({
       where: {
@@ -164,6 +222,9 @@ export class UsersService {
     });
   }
 
+  /**
+   * Clear password reset information.
+   */
   async clearPasswordResetToken(userId: string) {
     return this.prisma.user.update({
       where: {
@@ -174,5 +235,19 @@ export class UsersService {
         resetPasswordExpires: null,
       },
     });
+  }
+
+  /**
+   * Expose the Prisma service to application services
+   * that need to perform a transaction involving users
+   * and other related records.
+   *
+   * This keeps Prisma access inside UsersService instead
+   * of using private-property hacks such as:
+   *
+   * this.usersService['prisma']
+   */
+  getPrisma() {
+    return this.prisma;
   }
 }

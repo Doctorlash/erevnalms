@@ -1,9 +1,11 @@
-import { IsString } from 'class-validator';
+import { IsString, IsNotEmpty } from 'class-validator';
 
 export class CreateEnrollmentDto {
-  @IsString()
+  @IsString({ message: 'User ID must be a string.' })
+  @IsNotEmpty({ message: 'User ID is required.' })
   userId!: string;
 
-  @IsString()
+  @IsString({ message: 'Subject ID must be a string.' })
+  @IsNotEmpty({ message: 'Subject ID is required.' })
   subjectId!: string;
 }

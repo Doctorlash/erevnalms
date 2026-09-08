@@ -1,5 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-argument */
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
 import {
   BadRequestException,
   Body,
@@ -14,12 +12,13 @@ import {
 } from '@nestjs/common';
 
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-
-import { ProfileService } from './profile.service';
+import { memoryStorage } from 'multer';
 
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+
+import { ChangePasswordDto } from './dto/change-password.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { ProfileService } from './profile.service';
 
 @Controller('profile')
 @UseGuards(JwtAuthGuard)
@@ -27,35 +26,19 @@ export class ProfileController {
   constructor(private readonly profileService: ProfileService) {}
 
   @Get('me')
-  me(@Req() req: any) {
+  me(@Req() req: { user: { id: string } }) {
     return this.profileService.getProfile(req.user.id);
   }
 
   @Patch('me')
-  update(
-    @Req() req: any,
-    @Body()
-    body: {
-      firstName?: string;
-      lastName?: string;
-      phone?: string;
-      school?: string;
-      classLevel?: string;
-      bio?: string;
-      profileImage?: string;
-    },
-  ) {
+  update(@Req() req: { user: { id: string } }, @Body() body: UpdateProfileDto) {
     return this.profileService.updateProfile(req.user.id, body);
   }
 
   @Patch('password')
   password(
-    @Req() req: any,
-    @Body()
-    body: {
-      oldPassword: string;
-      newPassword: string;
-    },
+    @Req() req: { user: { id: string } },
+    @Body() body: ChangePasswordDto,
   ) {
     return this.profileService.changePassword(
       req.user.id,
@@ -67,26 +50,20 @@ export class ProfileController {
   @Post('avatar')
   @UseInterceptors(
     FileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads/profile',
-
-        filename: (_req, file, callback) => {
-          const uniqueName =
-            `${Date.now()}-${Math.round(Math.random() * 1e9)}` +
-            extname(file.originalname);
-
-          callback(null, uniqueName);
-        },
-      }),
+      storage: memoryStorage(),
 
       limits: {
         fileSize: 5 * 1024 * 1024,
       },
 
       fileFilter: (_req, file, callback) => {
-        if (!file.mimetype.startsWith('image/')) {
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+
+        if (!allowedTypes.includes(file.mimetype)) {
           return callback(
-            new BadRequestException('Only image files are allowed'),
+            new BadRequestException(
+              'Only JPEG, PNG, and WebP images are allowed',
+            ),
             false,
           );
         }
@@ -95,13 +72,14 @@ export class ProfileController {
       },
     }),
   )
-  avatar(@Req() req: any, @UploadedFile() file: Express.Multer.File) {
+  avatar(
+    @Req() req: { user: { id: string } },
+    @UploadedFile() file: Express.Multer.File,
+  ) {
     if (!file) {
-      throw new BadRequestException('Please upload an image');
+      throw new BadRequestException('Please upload a JPEG, PNG, or WebP image');
     }
 
-    const profileImage = `/uploads/profile/${file.filename}`;
-
-    return this.profileService.updateAvatar(req.user.id, profileImage);
+    return this.profileService.updateAvatar(req.user.id, file);
   }
 }

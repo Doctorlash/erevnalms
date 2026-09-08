@@ -42,6 +42,8 @@ export default function ProfilePage() {
     newPassword: "",
   });
 
+  const [passwordLoading, setPasswordLoading] = useState(false);
+
   const loadProfile = async () => {
     if (!user) return;
 
@@ -64,13 +66,15 @@ export default function ProfilePage() {
         isActive: response.data.isActive,
         createdAt: response.data.createdAt,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to load profile:", error);
-      alert("Unable to load your profile.");
+
+      alert(error?.response?.data?.message || "Unable to load your profile.");
     } finally {
       setLoading(false);
     }
   };
+
   useEffect(() => {
     if (!user) return;
 
@@ -101,7 +105,6 @@ export default function ProfilePage() {
         school: profile.school,
         classLevel: profile.classLevel,
         bio: profile.bio,
-        profileImage: profile.profileImage,
       });
 
       alert("Profile updated successfully.");
@@ -115,9 +118,22 @@ export default function ProfilePage() {
       setSaving(false);
     }
   };
+
   const uploadAvatar = async () => {
     if (!selectedFile || !user) {
       alert("Please select an image first.");
+      return;
+    }
+
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"];
+
+    if (!allowedTypes.includes(selectedFile.type)) {
+      alert("Only JPEG, PNG, and WebP images are allowed.");
+      return;
+    }
+
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      alert("Profile picture must not exceed 5 MB.");
       return;
     }
 
@@ -134,6 +150,14 @@ export default function ProfilePage() {
 
       setSelectedFile(null);
 
+      const fileInput = document.getElementById(
+        "profile-picture",
+      ) as HTMLInputElement | null;
+
+      if (fileInput) {
+        fileInput.value = "";
+      }
+
       await loadProfile();
     } catch (error: any) {
       console.error("Failed to upload profile picture:", error);
@@ -145,13 +169,21 @@ export default function ProfilePage() {
       setUploading(false);
     }
   };
+
   const changePassword = async () => {
     if (!password.oldPassword || !password.newPassword) {
       alert("Please enter your current and new password.");
       return;
     }
 
+    if (password.newPassword.length < 8) {
+      alert("Your new password must be at least 8 characters.");
+      return;
+    }
+
     try {
+      setPasswordLoading(true);
+
       await api.patch("/profile/password", {
         oldPassword: password.oldPassword,
         newPassword: password.newPassword,
@@ -167,6 +199,8 @@ export default function ProfilePage() {
       console.error("Failed to change password:", error);
 
       alert(error?.response?.data?.message || "Unable to change password.");
+    } finally {
+      setPasswordLoading(false);
     }
   };
 
@@ -196,31 +230,53 @@ export default function ProfilePage() {
 
           <div className="bg-white rounded-2xl shadow-lg p-6">
             <div className="flex flex-col items-center">
-              <img
-                src={profile.profileImage || "/default-avatar.png"}
-                alt="Profile"
-                className="w-36 h-36 rounded-full object-cover border-4 border-indigo-500"
-              />
+              {profile.profileImage ? (
+                <img
+                  src={profile.profileImage}
+                  alt="Profile"
+                  className="w-36 h-36 rounded-full object-cover border-4 border-indigo-500"
+                />
+              ) : (
+                <div className="w-36 h-36 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white text-5xl font-bold border-4 border-indigo-200">
+                  {profile.firstName?.charAt(0)?.toUpperCase() || "S"}
+                </div>
+              )}
 
               <h2 className="text-xl font-bold text-slate-900 mt-4">
                 {profile.firstName} {profile.lastName}
               </h2>
 
               {profile.email && (
-                <p className="text-gray-500 text-sm mt-1">{profile.email}</p>
+                <p className="text-gray-500 text-sm mt-1 break-all text-center">
+                  {profile.email}
+                </p>
               )}
 
-              <input
-                type="file"
-                accept="image/*"
-                className="mt-6 w-full text-sm"
-                onChange={(event) =>
-                  setSelectedFile(event.target.files?.[0] || null)
-                }
-              />
+              <div className="w-full mt-6">
+                <label
+                  htmlFor="profile-picture"
+                  className="block text-sm font-semibold mb-2"
+                >
+                  Profile Picture
+                </label>
+
+                <input
+                  id="profile-picture"
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="w-full text-sm"
+                  onChange={(event) =>
+                    setSelectedFile(event.target.files?.[0] || null)
+                  }
+                />
+
+                <p className="text-xs text-gray-400 mt-2">
+                  JPEG, PNG or WebP. Maximum size: 5 MB.
+                </p>
+              </div>
 
               {selectedFile && (
-                <p className="text-sm text-gray-500 mt-2 break-all">
+                <p className="text-sm text-gray-500 mt-2 break-all w-full">
                   Selected: {selectedFile.name}
                 </p>
               )}
@@ -240,7 +296,9 @@ export default function ProfilePage() {
               <div>
                 <p className="text-sm font-semibold text-gray-500">Email</p>
 
-                <p className="text-slate-900 mt-1">{profile.email || "-"}</p>
+                <p className="text-slate-900 mt-1 break-all">
+                  {profile.email || "-"}
+                </p>
               </div>
 
               <div>
@@ -268,7 +326,11 @@ export default function ProfilePage() {
 
                 <p className="text-slate-900 mt-1">
                   {profile.createdAt
-                    ? new Date(profile.createdAt).toLocaleDateString()
+                    ? new Date(profile.createdAt).toLocaleDateString("en-NG", {
+                        year: "numeric",
+                        month: "long",
+                        day: "numeric",
+                      })
                     : "-"}
                 </p>
               </div>
@@ -312,6 +374,22 @@ export default function ProfilePage() {
                       updateField("lastName", event.target.value)
                     }
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-semibold mb-2">
+                    Email
+                  </label>
+
+                  <input
+                    disabled
+                    className="border border-gray-200 bg-gray-100 text-gray-500 rounded-xl p-3 w-full cursor-not-allowed"
+                    value={profile.email || ""}
+                  />
+
+                  <p className="text-xs text-gray-400 mt-1">
+                    Your email address cannot be changed here.
+                  </p>
                 </div>
 
                 <div>
@@ -379,28 +457,6 @@ export default function ProfilePage() {
               </button>
             </div>
 
-            {/* PROFILE IMAGE URL */}
-
-            <div className="bg-white rounded-2xl shadow-lg p-6">
-              <h2 className="text-xl font-bold text-slate-900 mb-2">
-                Profile Image URL
-              </h2>
-
-              <p className="text-sm text-gray-500 mb-4">
-                You can either upload an image above or provide an image URL
-                here.
-              </p>
-
-              <input
-                className="border border-gray-300 rounded-xl p-3 w-full"
-                placeholder="https://example.com/profile.jpg"
-                value={profile.profileImage}
-                onChange={(event) =>
-                  updateField("profileImage", event.target.value)
-                }
-              />
-            </div>
-
             {/* CHANGE PASSWORD */}
 
             <div className="bg-white rounded-2xl shadow-lg p-6">
@@ -445,14 +501,19 @@ export default function ProfilePage() {
                       })
                     }
                   />
+
+                  <p className="text-xs text-gray-400 mt-1">
+                    Minimum 8 characters.
+                  </p>
                 </div>
               </div>
 
               <button
                 onClick={changePassword}
-                className="mt-6 bg-red-600 hover:bg-red-700 text-white px-6 py-3 rounded-xl font-semibold"
+                disabled={passwordLoading}
+                className="mt-6 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-xl font-semibold"
               >
-                Change Password
+                {passwordLoading ? "Changing..." : "Change Password"}
               </button>
             </div>
           </div>

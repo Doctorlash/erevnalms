@@ -8,73 +8,99 @@ datasource db {
 }
 
 model User {
-  id                    String                 @id @default(uuid())
-  firstName             String
-  lastName              String
-  email                 String                 @unique
-  password              String
-  role                  Role                   @default(STUDENT)
-  createdAt             DateTime               @default(now())
-  updatedAt             DateTime               @updatedAt
-  isActive              Boolean                @default(true)
-  resetPasswordToken    String?
-  resetPasswordExpires  DateTime?
-  bio                   String?
-  classLevel            String?
-  phone                 String?
-  profileImage          String?
-  school                String?
-  isOnline              Boolean                @default(false)
-  lastSeen              DateTime?
-  announcements         Announcement[]         @relation("TeacherAnnouncements")
-  teachingAssignments   Assignment[]           @relation("TeacherAssignments")
-  assignmentSubmissions AssignmentSubmission[] @relation("StudentAssignments")
-  attendances           Attendance[]           @relation("StudentAttendance")
-  certificates          Certificate[]
-  communityComments     CommunityComment[]
-  communityLikes        CommunityLike[]
-  communityPosts        CommunityPost[]
-  conversationOne       Conversation[]         @relation("ParticipantOne")
-  conversationTwo       Conversation[]         @relation("ParticipantTwo")
-  DiscussionReply       DiscussionReply[]
-  DiscussionThread      DiscussionThread[]
-  enrollments           Enrollment[]
-  resources             Resource[]
-  examAttempts          ExamAttempt[]
-  GroupMember           GroupMember[]
-  approvedLessons       Lesson[]               @relation("LessonApprovedBy")
-  createdLessons        Lesson[]               @relation("LessonCreatedBy")
-  lessonProgress        LessonProgress[]
-  teachingClasses       LiveClass[]            @relation("TeacherClasses")
-  sentMessages          Message[]              @relation("SentMessages")
-  MessageReaction       MessageReaction[]
-  notifications         Notification[]
-  teachingSubjects      Subject[]              @relation("TeacherSubjects")
-  subscriptions         Subscription[]
-  teacherProfile        TeacherProfile?
+  id                   String    @id @default(uuid())
+  firstName            String
+  lastName             String
+  email                String    @unique
+  password             String
+  role                 Role      @default(STUDENT)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+  isActive             Boolean   @default(true)
+  resetPasswordToken   String?
+  resetPasswordExpires DateTime?
+  bio                  String?
+  classLevel           String?
+  phone                String?
+  profileImage         String?
+  school               String?
+  isOnline             Boolean   @default(false)
+  lastSeen             DateTime?
+
+  studentProgrammes          StudentProgramme[]
+  subjectRequests            SubjectRequest[]
+  teacherSubjectApplications TeacherSubjectApplication[]
+  announcements              Announcement[]              @relation("TeacherAnnouncements")
+  teachingAssignments        Assignment[]                @relation("TeacherAssignments")
+  assignmentSubmissions      AssignmentSubmission[]      @relation("StudentAssignments")
+  attendances                Attendance[]                @relation("StudentAttendance")
+  certificates               Certificate[]
+  communityComments          CommunityComment[]
+  communityLikes             CommunityLike[]
+  communityPosts             CommunityPost[]
+  conversationOne            Conversation[]              @relation("ParticipantOne")
+  conversationTwo            Conversation[]              @relation("ParticipantTwo")
+  DiscussionReply            DiscussionReply[]
+  DiscussionThread           DiscussionThread[]
+  enrollments                Enrollment[]
+  resources                  Resource[]
+  examAttempts               ExamAttempt[]
+  contactMessages            ContactMessage[]
+  GroupMember                GroupMember[]
+  approvedLessons            Lesson[]                    @relation("LessonApprovedBy")
+  createdLessons             Lesson[]                    @relation("LessonCreatedBy")
+  lessonProgress             LessonProgress[]
+  teachingClasses            LiveClass[]                 @relation("TeacherClasses")
+  sentMessages               Message[]                   @relation("SentMessages")
+  MessageReaction            MessageReaction[]
+  notifications              Notification[]
+  teachingSubjects           Subject[]                   @relation("TeacherSubjects")
+  subscriptions              Subscription[]
+  teacherProfile             TeacherProfile?
+}
+
+model StudentProgramme {
+  id        String               @id @default(uuid())
+  userId    String
+  programme StudentProgrammeType
+  createdAt DateTime             @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, programme])
+  @@index([userId])
+  @@index([programme])
 }
 
 model Subject {
-  id               String             @id @default(uuid())
-  name             String             @unique
-  description      String?
-  isActive         Boolean            @default(true)
-  createdAt        DateTime           @default(now())
-  updatedAt        DateTime           @updatedAt
-  teacherId        String?
-  announcements    Announcement[]
-  assignments      Assignment[]
-  certificates     Certificate[]
-  resources        Resource[]
-  communityPosts   CommunityPost[]
-  DiscussionThread DiscussionThread[]
-  enrollments      Enrollment[]
-  Exam             Exam[]
-  Lesson           Lesson[]
-  LiveClass        LiveClass[]
-  questions        Question[]
-  teacher          User?              @relation("TeacherSubjects", fields: [teacherId], references: [id])
-  topics           Topic[]
+  id          String               @id @default(uuid())
+  name        String
+  description String?
+  programme   StudentProgrammeType
+  isActive    Boolean              @default(true)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+  teacherId   String?
+
+  announcements       Announcement[]
+  assignments         Assignment[]
+  certificates        Certificate[]
+  resources           Resource[]
+  communityPosts      CommunityPost[]
+  DiscussionThread    DiscussionThread[]
+  enrollments         Enrollment[]
+  subjectRequests     SubjectRequest[]
+  teacherApplications TeacherSubjectApplication[]
+  Exam                Exam[]
+  Lesson              Lesson[]
+  LiveClass           LiveClass[]
+  questions           Question[]
+  teacher             User?                       @relation("TeacherSubjects", fields: [teacherId], references: [id])
+  topics              Topic[]
+
+  @@unique([name, programme])
+  @@index([programme])
+  @@index([teacherId])
 }
 
 model Lesson {
@@ -115,14 +141,63 @@ model Topic {
 }
 
 model Enrollment {
-  id         String   @id @default(uuid())
+  id         String               @id @default(uuid())
   userId     String
   subjectId  String
-  enrolledAt DateTime @default(now())
-  subject    Subject  @relation(fields: [subjectId], references: [id])
-  user       User     @relation(fields: [userId], references: [id])
+  programme  StudentProgrammeType
+  type       EnrollmentType       @default(FREE)
+  enrolledAt DateTime             @default(now())
+  expiresAt  DateTime?
+
+  subject Subject @relation(fields: [subjectId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
 
   @@unique([userId, subjectId])
+  @@index([userId])
+  @@index([subjectId])
+  @@index([programme])
+  @@index([type])
+  @@index([expiresAt])
+}
+
+model SubjectRequest {
+  id              String               @id @default(uuid())
+  userId          String
+  subjectId       String
+  programme       StudentProgrammeType
+  status          SubjectRequestStatus @default(PENDING)
+  rejectionReason String?
+  requestedAt     DateTime             @default(now())
+  reviewedAt      DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, subjectId, programme])
+  @@index([userId])
+  @@index([subjectId])
+  @@index([programme])
+  @@index([status])
+}
+
+model TeacherSubjectApplication {
+  id              String                   @id @default(uuid())
+  teacherId       String
+  subjectId       String
+  programme       StudentProgrammeType
+  status          TeacherApplicationStatus @default(PENDING)
+  rejectionReason String?
+  requestedAt     DateTime                 @default(now())
+  reviewedAt      DateTime?
+
+  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+
+  @@unique([teacherId, subjectId, programme])
+  @@index([teacherId])
+  @@index([subjectId])
+  @@index([programme])
+  @@index([status])
 }
 
 model LessonProgress {
@@ -444,21 +519,36 @@ model TeacherProfile {
 }
 
 model ContactMessage {
-  id        String        @id @default(uuid())
+  id        String             @id @default(uuid())
+  userId    String?
+  type      ContactMessageType @default(CONTACT)
   name      String
   email     String
   phone     String?
   subject   String
   message   String
-  status    ContactStatus @default(UNREAD)
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
+  status    ContactStatus      @default(UNREAD)
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
 }
 
 enum ContactStatus {
   UNREAD
   READ
   RESOLVED
+}
+
+enum TeacherApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum Role {
@@ -477,6 +567,11 @@ enum ExamType {
   WAEC
   JAMB
   NECO
+}
+
+enum ContactMessageType {
+  CONTACT
+  SUPPORT
 }
 
 enum SubscriptionPlan {
@@ -504,6 +599,22 @@ enum ResourceType {
   PDF
   VIDEO
   AUDIO
+}
+
+enum StudentProgrammeType {
+  JAMB
+  WAEC
+}
+
+enum EnrollmentType {
+  FREE
+  PAID
+}
+
+enum SubjectRequestStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 model Resource {

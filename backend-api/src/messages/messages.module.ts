@@ -4,9 +4,10 @@ import { MessagesController } from './messages.controller';
 import { MessagesGateway } from './messages.gateway';
 import { MessagesService } from './messages.service';
 import { PresenceModule } from '../presence/presence.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
-  imports: [PresenceModule],
+  imports: [AuthModule, PresenceModule],
 
   controllers: [MessagesController],
 

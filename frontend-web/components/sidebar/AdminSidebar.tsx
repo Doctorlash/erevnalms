@@ -41,6 +41,16 @@ export default function AdminSidebar() {
       icon: "📚",
     },
     {
+      name: "Teacher Application",
+      href: "/dashboard/admin/teacher-applications",
+      icon: "📝",
+    },
+    {
+      name: "subject Requests",
+      href: "/dashboard/admin/subject-requests",
+      icon: "📩",
+    },
+    {
       name: "Topics",
       href: "/dashboard/admin/topics",
       icon: "🗂️",

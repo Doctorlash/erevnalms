@@ -48,6 +48,11 @@ export default function TeacherSidebar() {
       icon: "💬",
     },
     {
+      name: "Subject Applications",
+      href: "/dashboard/teacher/applications",
+      icon: "📝",
+    },
+    {
       name: "Questions",
       href: "/dashboard/teacher/questions",
       icon: "❓",
