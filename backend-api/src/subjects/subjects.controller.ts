@@ -22,33 +22,40 @@ import type { AuthenticatedUser } from '../auth/decorators/current-user.decorato
 import { StudentProgrammeType } from '@prisma/client';
 
 @Controller('subjects')
-@UseGuards(JwtAuthGuard, RolesGuard)
 export class SubjectsController {
   constructor(private readonly subjectsService: SubjectsService) {}
+
+  /**
+   * ============================================================
+   * PUBLIC REGISTRATION
+   * GET SUBJECTS AVAILABLE FOR STUDENT REGISTRATION
+   * ============================================================
+   *
+   * These subjects are loaded before the student is logged in.
+   *
+   * Examples:
+   *
+   * GET /subjects/registration?programme=JAMB
+   * GET /subjects/registration?programme=WAEC
+   *
+   * Only active subjects belonging to the selected programme
+   * are returned.
+   */
+  @Get('registration')
+  availableForRegistration(
+    @Query('programme') programme: StudentProgrammeType,
+  ) {
+    return this.subjectsService.availableForRegistration(programme);
+  }
 
   /**
    * ============================================================
    * ADMIN
    * CREATE SUBJECT
    * ============================================================
-   *
-   * Example:
-   *
-   * {
-   *   "name": "Mathematics",
-   *   "description": "JAMB Mathematics",
-   *   "programme": "JAMB"
-   * }
-   *
-   * or:
-   *
-   * {
-   *   "name": "Mathematics",
-   *   "description": "WAEC Mathematics",
-   *   "programme": "WAEC"
-   * }
    */
   @Post()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   create(@Body() dto: CreateSubjectDto) {
     return this.subjectsService.create(dto);
@@ -63,14 +70,11 @@ export class SubjectsController {
    * Optional:
    *
    * GET /subjects?programme=JAMB
-   *
    * GET /subjects?programme=WAEC
-   *
-   * Without programme:
-   *
    * GET /subjects
    */
   @Get()
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   findAll(@Query('programme') programme?: StudentProgrammeType) {
     return this.subjectsService.findAll(programme);
@@ -81,14 +85,9 @@ export class SubjectsController {
    * STUDENT
    * GET AUTHENTICATED STUDENT'S SUBJECTS
    * ============================================================
-   *
-   * IMPORTANT:
-   *
-   * The user ID comes from the JWT.
-   *
-   * A student cannot provide another user's ID.
    */
   @Get('my-subjects')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   mySubjects(@CurrentUser() user: AuthenticatedUser) {
     return this.subjectsService.studentSubjects(user.id);
@@ -101,6 +100,7 @@ export class SubjectsController {
    * ============================================================
    */
   @Get('my-subjects/teacher')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('TEACHER')
   teacherSubjects(@CurrentUser() user: AuthenticatedUser) {
     return this.subjectsService.teacherSubjects(user.id);
@@ -113,6 +113,7 @@ export class SubjectsController {
    * ============================================================
    */
   @Get('teacher/:teacherId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   teacherSubjectsById(@Param('teacherId') teacherId: string) {
     return this.subjectsService.teacherSubjects(teacherId);
@@ -123,13 +124,9 @@ export class SubjectsController {
    * STUDENT
    * GET ONE ENROLLED SUBJECT
    * ============================================================
-   *
-   * The student identity comes from the JWT.
-   *
-   * Changing the subject ID does not give access unless the
-   * authenticated student is actually enrolled.
    */
   @Get('student/:id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   studentSubject(
     @CurrentUser() user: AuthenticatedUser,
@@ -140,23 +137,38 @@ export class SubjectsController {
 
   /**
    * ============================================================
-   * ADMIN
-   * GET ONE SUBJECT
+   * STUDENT
+   * GET AVAILABLE SUBJECTS
    * ============================================================
    */
   @Get('available')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('STUDENT')
   availableForStudent(@Query('programme') programme: StudentProgrammeType) {
     return this.subjectsService.availableForStudent(programme);
   }
+
+  /**
+   * ============================================================
+   * TEACHER
+   * GET AVAILABLE SUBJECTS FOR APPLICATION
+   * ============================================================
+   */
   @Get('available-for-teacher')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('TEACHER')
-  async availableForTeacher(
-    @Query('programme') programme: StudentProgrammeType,
-  ) {
+  availableForTeacher(@Query('programme') programme: StudentProgrammeType) {
     return this.subjectsService.availableForTeacher(programme);
   }
+
+  /**
+   * ============================================================
+   * ADMIN
+   * GET ONE SUBJECT
+   * ============================================================
+   */
   @Get(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   findOne(@Param('id') id: string) {
     return this.subjectsService.findOne(id);
@@ -169,6 +181,7 @@ export class SubjectsController {
    * ============================================================
    */
   @Delete(':id')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   delete(@Param('id') id: string) {
     return this.subjectsService.delete(id);
@@ -181,6 +194,7 @@ export class SubjectsController {
    * ============================================================
    */
   @Patch(':subjectId/assign-teacher/:teacherId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
   assignTeacher(
     @Param('subjectId') subjectId: string,

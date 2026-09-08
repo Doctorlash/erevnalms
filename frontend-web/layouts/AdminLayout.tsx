@@ -12,114 +12,150 @@ interface Props {
 export default function AdminLayout({ children }: Props) {
   const { user } = useAdminAuth();
 
-  return (
-    <div className="h-screen overflow-hidden bg-slate-100 flex">
-      {/* SIDEBAR */}
-      <aside className="hidden lg:flex h-screen w-72 shrink-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl flex-col">
-        {/* Logo */}
-        <div className="shrink-0 px-6 py-6 border-b border-white/10">
-          <div className="flex items-center gap-3">
-            <Image
-              src="/logo.png"
-              alt="Erevna Logo"
-              width={52}
-              height={52}
-              className="rounded-full object-cover"
-            />
+  const initials =
+    `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`.toUpperCase() ||
+    "A";
 
-            <div>
+  return (
+    <div className="flex h-screen overflow-hidden bg-slate-100">
+      {/* SIDEBAR */}
+      <aside className="hidden h-screen w-72 shrink-0 flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl lg:flex">
+        {/* BRAND */}
+        <div className="shrink-0 border-b border-white/10 px-6 py-6">
+          <div className="flex items-center gap-3">
+            <div className="relative shrink-0">
+              <div className="absolute inset-0 rounded-full bg-indigo-500/20 blur-md" />
+
+              <Image
+                src="/logo.png"
+                alt="Erevna Logo"
+                width={50}
+                height={50}
+                className="relative rounded-full object-cover ring-2 ring-white/10"
+              />
+            </div>
+
+            <div className="min-w-0">
               <h1 className="text-2xl font-bold tracking-tight">Erevna</h1>
 
-              <p className="text-xs text-slate-400">
+              <p className="truncate text-xs text-slate-400">
                 Learning Management System
               </p>
             </div>
           </div>
         </div>
 
-        {/* Admin profile */}
-        <div className="shrink-0 p-5">
-          <div className="rounded-2xl bg-white/5 border border-white/10 p-4">
+        {/* ADMIN PROFILE */}
+        <div className="shrink-0 px-5 py-5">
+          <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 shadow-lg">
             <div className="flex items-center gap-3">
-              <div className="h-12 w-12 shrink-0 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg shadow-lg">
-                {user?.firstName?.charAt(0)?.toUpperCase() || "A"}
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-lg font-bold text-white shadow-lg ring-2 ring-white/10">
+                {initials}
               </div>
 
               <div className="min-w-0">
-                <p className="font-semibold truncate">
-                  {user?.firstName} {user?.lastName}
+                <p className="truncate font-semibold text-white">
+                  {user?.firstName || "Admin"} {user?.lastName || ""}
                 </p>
 
-                <span className="inline-flex mt-1 px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-xs font-medium">
+                <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-purple-500/15 px-2.5 py-1 text-xs font-medium text-purple-300">
+                  <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
                   Administrator
-                </span>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Navigation - INDEPENDENT SCROLL */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6">
-          <p className="px-3 mb-3 text-[11px] uppercase tracking-widest text-slate-500 font-semibold">
-            Administration
-          </p>
+        {/* NAVIGATION */}
+        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 [scrollbar-color:#475569_transparent] [scrollbar-width:thin]">
+          <div className="mb-3 flex items-center gap-2 px-3">
+            <span className="h-px flex-1 bg-white/10" />
+
+            <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
+              Administration
+            </p>
+
+            <span className="h-px flex-1 bg-white/10" />
+          </div>
 
           <AdminSidebar />
         </div>
 
-        {/* Footer */}
+        {/* FOOTER */}
         <div className="shrink-0 border-t border-white/10 px-5 py-4">
-          <p className="text-xs text-slate-500 text-center">
+          <p className="text-center text-xs text-slate-500">
             © {new Date().getFullYear()} Erevna LMS
           </p>
         </div>
       </aside>
 
-      {/* MAIN AREA */}
-      <div className="min-w-0 min-h-0 flex-1 flex flex-col">
-        {/* TOP HEADER */}
-        <header className="shrink-0 sticky top-0 z-30 bg-white/90 backdrop-blur-md border-b border-slate-200 shadow-sm">
-          <div className="h-20 px-6 lg:px-8 flex items-center justify-between">
-            <div>
-              <p className="text-sm text-slate-500">Administration Portal</p>
+      {/* MAIN */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* HEADER */}
+        <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur-xl">
+          <div className="flex h-20 items-center justify-between px-5 sm:px-6 lg:px-8">
+            {/* WELCOME */}
+            <div className="min-w-0">
+              <p className="mb-0.5 text-xs font-semibold uppercase tracking-wider text-indigo-600 sm:text-sm">
+                Administration Portal
+              </p>
 
-              <h1 className="text-xl font-bold text-slate-800">
+              <h1 className="truncate text-lg font-bold text-slate-800 sm:text-xl">
                 Welcome back, {user?.firstName || "Admin"} 👋
               </h1>
             </div>
 
-            <div className="flex items-center gap-3">
+            {/* HEADER ACTIONS */}
+            <div className="flex items-center gap-2 sm:gap-3">
+              {/* NOTIFICATIONS */}
               <button
-                className="hidden sm:flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 transition"
+                type="button"
+                aria-label="Notifications"
                 title="Notifications"
+                className="hidden h-10 w-10 items-center justify-center rounded-xl border border-slate-200 bg-slate-50 text-slate-600 transition-all hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600 sm:flex"
               >
-                🔔
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.8"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M14.857 17.082a23.848 23.848 0 0 1-5.714 0A2.25 2.25 0 0 1 7.25 14.85V11a4.75 4.75 0 1 1 9.5 0v3.85a2.25 2.25 0 0 1-1.893 2.232ZM9.75 20h4.5"
+                  />
+                </svg>
               </button>
 
-              <div className="hidden sm:block h-8 w-px bg-slate-200" />
+              <div className="hidden h-8 w-px bg-slate-200 sm:block" />
 
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold">
-                  {user?.firstName?.charAt(0)?.toUpperCase() || "A"}
+              {/* USER */}
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-bold text-white shadow-md ring-2 ring-indigo-100">
+                  {initials}
                 </div>
 
-                <div className="hidden md:block">
-                  <p className="text-sm font-semibold text-slate-700">
-                    {user?.firstName} {user?.lastName}
+                <div className="hidden min-w-0 md:block">
+                  <p className="max-w-[150px] truncate text-sm font-semibold text-slate-700">
+                    {user?.firstName || "Admin"} {user?.lastName || ""}
                   </p>
 
                   <p className="text-xs text-slate-400">Administrator</p>
                 </div>
 
-                <LogoutButton className="w-full px-4 py-3 text-left text-red-600 hover:bg-red-50 rounded-lg" />
+                <LogoutButton className="rounded-xl px-3 py-2.5 text-left text-red-600 transition-colors hover:bg-red-50" />
               </div>
             </div>
           </div>
         </header>
 
-        {/* PAGE CONTENT - INDEPENDENT SCROLL */}
-        <main className="min-h-0 flex-1 overflow-y-auto p-5 sm:p-6 lg:p-8">
-          <div className="max-w-[1600px] mx-auto">{children}</div>
+        {/* CONTENT */}
+        <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
+          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
         </main>
       </div>
     </div>

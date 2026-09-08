@@ -65,6 +65,8 @@ export default function RegisterPage() {
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
 
+    setError("");
+
     setForm((current) => ({
       ...current,
       [name]: value,
@@ -78,6 +80,8 @@ export default function RegisterPage() {
    */
 
   const toggleProgramme = (programme: Programme) => {
+    if (registering) return;
+
     setError("");
     setSuccess("");
 
@@ -171,6 +175,8 @@ export default function RegisterPage() {
    */
 
   const toggleJambSubject = (subjectId: string) => {
+    if (registering) return;
+
     setError("");
 
     setSelectedJambSubjects((current) => {
@@ -188,6 +194,8 @@ export default function RegisterPage() {
   };
 
   const toggleWaecSubject = (subjectId: string) => {
+    if (registering) return;
+
     setError("");
 
     setSelectedWaecSubjects((current) => {
@@ -263,6 +271,10 @@ export default function RegisterPage() {
   const register = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (registering) {
+      return;
+    }
+
     setError("");
     setSuccess("");
 
@@ -281,7 +293,6 @@ export default function RegisterPage() {
         lastName: form.lastName.trim(),
         email: form.email.trim().toLowerCase(),
         password: form.password,
-
         programmes: selectedProgrammes,
 
         ...(hasJamb
@@ -301,6 +312,13 @@ export default function RegisterPage() {
         "Registration successful. Your subject requests have been submitted for approval.",
       );
 
+      /*
+       * Keep registering=true here.
+       *
+       * This is intentional. The user should continue seeing
+       * the loading state while the success message is displayed
+       * and the application redirects to the login page.
+       */
       setTimeout(() => {
         router.push("/login");
       }, 1800);
@@ -318,18 +336,21 @@ export default function RegisterPage() {
           "Registration failed. Please check your details and try again.",
         );
       }
-    } finally {
+
+      /*
+       * Only stop the loading state when registration actually fails.
+       */
       setRegistering(false);
     }
   };
 
   return (
-    <div className="min-h-screen grid md:grid-cols-2">
+    <div className="min-h-screen bg-gray-50 md:grid md:grid-cols-2">
       {/* ========================================================
           LEFT SIDE
       ========================================================= */}
 
-      <div className="hidden md:flex flex-col justify-center items-center bg-gradient-to-br from-blue-900 via-slate-900 to-blue-700 text-white p-12">
+      <div className="hidden min-h-screen flex-col items-center justify-center bg-gradient-to-br from-blue-900 via-slate-900 to-blue-700 p-12 text-white md:flex">
         <Image
           src="/logo3.png"
           alt="Erevna Logo"
@@ -338,11 +359,11 @@ export default function RegisterPage() {
           className="mb-8"
         />
 
-        <h1 className="text-5xl font-bold mb-4 text-center">
+        <h1 className="mb-4 text-center text-5xl font-bold">
           Start Your Erevna Journey
         </h1>
 
-        <p className="text-xl text-center max-w-lg text-gray-200">
+        <p className="max-w-lg text-center text-xl leading-relaxed text-gray-200">
           Prepare for JAMB and WAEC with structured learning, expert
           instruction, and quality academic resources.
         </p>
@@ -352,10 +373,10 @@ export default function RegisterPage() {
           RIGHT SIDE
       ========================================================= */}
 
-      <div className="flex items-center justify-center bg-gray-50 px-6 py-10">
+      <div className="flex min-h-screen items-center justify-center px-4 py-8 sm:px-6 sm:py-10">
         <form
           onSubmit={register}
-          className="bg-white p-8 md:p-10 rounded-2xl shadow-xl w-full max-w-2xl"
+          className="w-full max-w-2xl rounded-2xl border border-gray-100 bg-white p-6 shadow-xl sm:p-8 md:p-10"
         >
           {/* Header */}
           <div className="mb-8">
@@ -363,22 +384,59 @@ export default function RegisterPage() {
               Create Your Account
             </h2>
 
-            <p className="text-gray-500 mt-2">
+            <p className="mt-2 text-gray-500">
               Choose your examination programme and subjects.
             </p>
           </div>
 
           {/* Error */}
           {error && (
-            <div className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4">
-              <p className="text-sm font-medium text-red-600">{error}</p>
+            <div
+              role="alert"
+              className="mb-6 rounded-xl border border-red-200 bg-red-50 p-4"
+            >
+              <div className="flex items-start gap-3">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="mt-0.5 h-5 w-5 shrink-0 text-red-500"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="9" />
+                  <path strokeLinecap="round" d="M12 8v4m0 4h.01" />
+                </svg>
+
+                <p className="text-sm font-medium text-red-600">{error}</p>
+              </div>
             </div>
           )}
 
           {/* Success */}
           {success && (
-            <div className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4">
-              <p className="text-sm font-medium text-green-600">{success}</p>
+            <div
+              role="status"
+              className="mb-6 rounded-xl border border-green-200 bg-green-50 p-4"
+            >
+              <div className="flex items-start gap-3">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="mt-0.5 h-5 w-5 shrink-0 text-green-600"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="m5 12 4 4L19 6"
+                  />
+                </svg>
+
+                <p className="text-sm font-medium text-green-700">{success}</p>
+              </div>
             </div>
           )}
 
@@ -386,11 +444,11 @@ export default function RegisterPage() {
               BASIC INFORMATION
           ==================================================== */}
 
-          <div className="grid md:grid-cols-2 gap-5 mb-6">
+          <div className="mb-6 grid gap-5 md:grid-cols-2">
             <div>
               <label
                 htmlFor="firstName"
-                className="block text-sm font-semibold text-gray-700 mb-2"
+                className="mb-2 block text-sm font-semibold text-gray-700"
               >
                 First Name
               </label>
@@ -403,8 +461,8 @@ export default function RegisterPage() {
                 onChange={handleInputChange}
                 placeholder="e.g. Toluwalase"
                 autoComplete="given-name"
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-500 placeholder:opacity-100 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 disabled={registering}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition placeholder:text-gray-500 placeholder:opacity-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-gray-100"
               />
 
               <p className="mt-1.5 text-xs text-gray-500">
@@ -415,7 +473,7 @@ export default function RegisterPage() {
             <div>
               <label
                 htmlFor="lastName"
-                className="block text-sm font-semibold text-gray-700 mb-2"
+                className="mb-2 block text-sm font-semibold text-gray-700"
               >
                 Last Name
               </label>
@@ -428,8 +486,8 @@ export default function RegisterPage() {
                 onChange={handleInputChange}
                 placeholder="e.g. Ikumawoyi"
                 autoComplete="family-name"
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-500 placeholder:opacity-100 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 disabled={registering}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition placeholder:text-gray-500 placeholder:opacity-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-gray-100"
               />
 
               <p className="mt-1.5 text-xs text-gray-500">
@@ -442,7 +500,7 @@ export default function RegisterPage() {
           <div className="mb-5">
             <label
               htmlFor="email"
-              className="block text-sm font-semibold text-gray-700 mb-2"
+              className="mb-2 block text-sm font-semibold text-gray-700"
             >
               Email Address
             </label>
@@ -455,8 +513,8 @@ export default function RegisterPage() {
               onChange={handleInputChange}
               placeholder="e.g. you@example.com"
               autoComplete="email"
-              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 placeholder:text-gray-500 placeholder:opacity-100 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
               disabled={registering}
+              className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 text-gray-900 outline-none transition placeholder:text-gray-500 placeholder:opacity-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-gray-100"
             />
 
             <p className="mt-1.5 text-xs text-gray-500">
@@ -468,7 +526,7 @@ export default function RegisterPage() {
           <div className="mb-8">
             <label
               htmlFor="password"
-              className="block text-sm font-semibold text-gray-700 mb-2"
+              className="mb-2 block text-sm font-semibold text-gray-700"
             >
               Password
             </label>
@@ -482,15 +540,15 @@ export default function RegisterPage() {
                 onChange={handleInputChange}
                 placeholder="Create a password (minimum 6 characters)"
                 autoComplete="new-password"
-                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-20 text-gray-900 placeholder:text-gray-500 placeholder:opacity-100 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
                 disabled={registering}
+                className="w-full rounded-xl border border-gray-300 bg-white px-4 py-3 pr-20 text-gray-900 outline-none transition placeholder:text-gray-500 placeholder:opacity-100 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 disabled:cursor-not-allowed disabled:bg-gray-100"
               />
 
               <button
                 type="button"
                 onClick={() => setShowPassword((current) => !current)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
                 disabled={registering}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-indigo-600 hover:text-indigo-800 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {showPassword ? "Hide" : "Show"}
               </button>
@@ -511,40 +569,55 @@ export default function RegisterPage() {
                 Choose Your Programme
               </h3>
 
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="mt-1 text-sm text-gray-500">
                 You can select JAMB, WAEC, or both.
               </p>
             </div>
 
-            <div className="grid md:grid-cols-2 gap-4">
+            <div className="grid gap-4 md:grid-cols-2">
               {/* JAMB */}
               <button
                 type="button"
                 onClick={() => toggleProgramme("JAMB")}
                 disabled={registering}
-                className={`text-left rounded-2xl border-2 p-5 transition ${
+                className={`rounded-2xl border-2 p-5 text-left transition ${
                   hasJamb
-                    ? "border-indigo-600 bg-indigo-50"
-                    : "border-gray-200 bg-white hover:border-indigo-300"
-                }`}
+                    ? "border-indigo-600 bg-indigo-50 shadow-sm"
+                    : "border-gray-200 bg-white hover:border-indigo-300 hover:shadow-sm"
+                } ${registering ? "cursor-not-allowed opacity-70" : ""}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h4 className="text-xl font-bold text-gray-800">JAMB</h4>
 
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="mt-1 text-sm text-gray-500">
                       Select up to 4 subjects.
                     </p>
                   </div>
 
                   <div
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
                       hasJamb
                         ? "border-indigo-600 bg-indigo-600 text-white"
-                        : "border-gray-300"
+                        : "border-gray-300 bg-white"
                     }`}
                   >
-                    {hasJamb && "✓"}
+                    {hasJamb && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="m5 12 4 4L19 6"
+                        />
+                      </svg>
+                    )}
                   </div>
                 </div>
               </button>
@@ -554,29 +627,44 @@ export default function RegisterPage() {
                 type="button"
                 onClick={() => toggleProgramme("WAEC")}
                 disabled={registering}
-                className={`text-left rounded-2xl border-2 p-5 transition ${
+                className={`rounded-2xl border-2 p-5 text-left transition ${
                   hasWaec
-                    ? "border-purple-600 bg-purple-50"
-                    : "border-gray-200 bg-white hover:border-purple-300"
-                }`}
+                    ? "border-purple-600 bg-purple-50 shadow-sm"
+                    : "border-gray-200 bg-white hover:border-purple-300 hover:shadow-sm"
+                } ${registering ? "cursor-not-allowed opacity-70" : ""}`}
               >
                 <div className="flex items-start justify-between gap-4">
                   <div>
                     <h4 className="text-xl font-bold text-gray-800">WAEC</h4>
 
-                    <p className="text-sm text-gray-500 mt-1">
+                    <p className="mt-1 text-sm text-gray-500">
                       Select up to 9 subjects.
                     </p>
                   </div>
 
                   <div
-                    className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${
+                    className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 ${
                       hasWaec
                         ? "border-purple-600 bg-purple-600 text-white"
-                        : "border-gray-300"
+                        : "border-gray-300 bg-white"
                     }`}
                   >
-                    {hasWaec && "✓"}
+                    {hasWaec && (
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="3"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          d="m5 12 4 4L19 6"
+                        />
+                      </svg>
+                    )}
                   </div>
                 </div>
               </button>
@@ -589,13 +677,13 @@ export default function RegisterPage() {
 
           {hasJamb && (
             <div className="mb-8 rounded-2xl border border-indigo-200 bg-indigo-50/50 p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800">
                     JAMB Subjects
                   </h3>
 
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="mt-1 text-sm text-gray-500">
                     Choose the subjects you want to request.
                   </p>
                 </div>
@@ -606,8 +694,30 @@ export default function RegisterPage() {
               </div>
 
               {loadingJamb ? (
-                <div className="rounded-xl bg-white p-5 text-center">
-                  <p className="text-indigo-600 font-medium">
+                <div className="flex items-center justify-center gap-3 rounded-xl bg-white p-5">
+                  <svg
+                    className="h-5 w-5 animate-spin text-indigo-600"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"
+                    />
+                  </svg>
+
+                  <p className="font-medium text-indigo-600">
                     Loading JAMB subjects...
                   </p>
                 </div>
@@ -616,9 +726,14 @@ export default function RegisterPage() {
                   <p className="text-gray-500">
                     No JAMB subjects are currently available.
                   </p>
+
+                  <p className="mt-1 text-xs text-gray-400">
+                    Please contact the administrator if you believe this is an
+                    error.
+                  </p>
                 </div>
               ) : (
-                <div className="grid sm:grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {jambSubjects.map((subject) => {
                     const selected = selectedJambSubjects.includes(subject.id);
 
@@ -631,23 +746,38 @@ export default function RegisterPage() {
                         type="button"
                         onClick={() => toggleJambSubject(subject.id)}
                         disabled={registering || disabled}
-                        className={`text-left rounded-xl border p-4 transition ${
+                        className={`rounded-xl border p-4 text-left transition ${
                           selected
-                            ? "border-indigo-600 bg-indigo-100"
+                            ? "border-indigo-600 bg-indigo-100 shadow-sm"
                             : disabled
-                              ? "border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed"
-                              : "border-gray-200 bg-white hover:border-indigo-400"
+                              ? "cursor-not-allowed border-gray-200 bg-gray-100 opacity-60"
+                              : "border-gray-200 bg-white hover:border-indigo-400 hover:shadow-sm"
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
                               selected
                                 ? "border-indigo-600 bg-indigo-600 text-white"
                                 : "border-gray-300 bg-white"
                             }`}
                           >
-                            {selected && "✓"}
+                            {selected && (
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-3.5 w-3.5"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="m5 12 4 4L19 6"
+                                />
+                              </svg>
+                            )}
                           </div>
 
                           <span className="font-semibold text-gray-800">
@@ -668,13 +798,13 @@ export default function RegisterPage() {
 
           {hasWaec && (
             <div className="mb-8 rounded-2xl border border-purple-200 bg-purple-50/50 p-5">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+              <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div>
                   <h3 className="text-xl font-bold text-gray-800">
                     WAEC Subjects
                   </h3>
 
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="mt-1 text-sm text-gray-500">
                     Choose the subjects you want to request.
                   </p>
                 </div>
@@ -685,8 +815,30 @@ export default function RegisterPage() {
               </div>
 
               {loadingWaec ? (
-                <div className="rounded-xl bg-white p-5 text-center">
-                  <p className="text-purple-600 font-medium">
+                <div className="flex items-center justify-center gap-3 rounded-xl bg-white p-5">
+                  <svg
+                    className="h-5 w-5 animate-spin text-purple-600"
+                    xmlns="http://www.w3.org/2000/svg"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                  >
+                    <circle
+                      className="opacity-25"
+                      cx="12"
+                      cy="12"
+                      r="10"
+                      stroke="currentColor"
+                      strokeWidth="4"
+                    />
+
+                    <path
+                      className="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"
+                    />
+                  </svg>
+
+                  <p className="font-medium text-purple-600">
                     Loading WAEC subjects...
                   </p>
                 </div>
@@ -695,9 +847,14 @@ export default function RegisterPage() {
                   <p className="text-gray-500">
                     No WAEC subjects are currently available.
                   </p>
+
+                  <p className="mt-1 text-xs text-gray-400">
+                    Please contact the administrator if you believe this is an
+                    error.
+                  </p>
                 </div>
               ) : (
-                <div className="grid sm:grid-cols-2 gap-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                   {waecSubjects.map((subject) => {
                     const selected = selectedWaecSubjects.includes(subject.id);
 
@@ -710,23 +867,38 @@ export default function RegisterPage() {
                         type="button"
                         onClick={() => toggleWaecSubject(subject.id)}
                         disabled={registering || disabled}
-                        className={`text-left rounded-xl border p-4 transition ${
+                        className={`rounded-xl border p-4 text-left transition ${
                           selected
-                            ? "border-purple-600 bg-purple-100"
+                            ? "border-purple-600 bg-purple-100 shadow-sm"
                             : disabled
-                              ? "border-gray-200 bg-gray-100 opacity-60 cursor-not-allowed"
-                              : "border-gray-200 bg-white hover:border-purple-400"
+                              ? "cursor-not-allowed border-gray-200 bg-gray-100 opacity-60"
+                              : "border-gray-200 bg-white hover:border-purple-400 hover:shadow-sm"
                         }`}
                       >
                         <div className="flex items-center gap-3">
                           <div
-                            className={`w-5 h-5 rounded border flex items-center justify-center shrink-0 ${
+                            className={`flex h-5 w-5 shrink-0 items-center justify-center rounded border ${
                               selected
                                 ? "border-purple-600 bg-purple-600 text-white"
                                 : "border-gray-300 bg-white"
                             }`}
                           >
-                            {selected && "✓"}
+                            {selected && (
+                              <svg
+                                xmlns="http://www.w3.org/2000/svg"
+                                className="h-3.5 w-3.5"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="m5 12 4 4L19 6"
+                                />
+                              </svg>
+                            )}
                           </div>
 
                           <span className="font-semibold text-gray-800">
@@ -746,8 +918,8 @@ export default function RegisterPage() {
           ==================================================== */}
 
           {selectedProgrammes.length > 0 && (
-            <div className="mb-6 rounded-2xl bg-gray-50 border border-gray-200 p-5">
-              <h3 className="font-bold text-gray-800 mb-3">
+            <div className="mb-6 rounded-2xl border border-gray-200 bg-gray-50 p-5">
+              <h3 className="mb-3 font-bold text-gray-800">
                 Registration Summary
               </h3>
 
@@ -755,6 +927,7 @@ export default function RegisterPage() {
                 {hasJamb && (
                   <div className="flex justify-between gap-4">
                     <span className="text-gray-500">JAMB</span>
+
                     <span className="font-semibold text-gray-800">
                       {selectedJambSubjects.length} subject
                       {selectedJambSubjects.length === 1 ? "" : "s"}
@@ -765,6 +938,7 @@ export default function RegisterPage() {
                 {hasWaec && (
                   <div className="flex justify-between gap-4">
                     <span className="text-gray-500">WAEC</span>
+
                     <span className="font-semibold text-gray-800">
                       {selectedWaecSubjects.length} subject
                       {selectedWaecSubjects.length === 1 ? "" : "s"}
@@ -775,21 +949,74 @@ export default function RegisterPage() {
             </div>
           )}
 
-          {/* Submit */}
+          {/* ====================================================
+              REGISTER BUTTON
+          ==================================================== */}
+
           <button
             type="submit"
             disabled={registering}
-            className="w-full rounded-xl bg-indigo-600 px-6 py-3.5 text-white font-bold transition hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
+            className={`flex w-full items-center justify-center gap-3 rounded-xl px-6 py-3.5 font-bold text-white transition-all ${
+              registering
+                ? "cursor-not-allowed bg-indigo-500"
+                : "bg-indigo-600 hover:bg-indigo-700 hover:shadow-lg active:scale-[0.99]"
+            }`}
           >
-            {registering ? "Creating Account..." : "Create Account"}
+            {registering ? (
+              <>
+                <svg
+                  className="h-5 w-5 animate-spin"
+                  xmlns="http://www.w3.org/2000/svg"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+
+                  <path
+                    className="opacity-90"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"
+                  />
+                </svg>
+
+                <span>Creating Account...</span>
+              </>
+            ) : (
+              <>
+                <span>Create Account</span>
+
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="h-5 w-5"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13 5l7 7-7 7M20 12H4"
+                  />
+                </svg>
+              </>
+            )}
           </button>
 
           {/* Login */}
-          <p className="text-center text-gray-500 mt-6">
+          <p className="mt-6 text-center text-gray-500">
             Already have an account?{" "}
             <Link
               href="/login"
-              className="font-semibold text-indigo-600 hover:text-indigo-800"
+              className="font-semibold text-indigo-600 transition hover:text-indigo-800"
             >
               Login
             </Link>

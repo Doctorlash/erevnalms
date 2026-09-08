@@ -4,6 +4,8 @@ import AdminLayout from "../../../layouts/AdminLayout";
 import useAdminAuth from "../../../hooks/useAdminAuth";
 import api from "../../../services/api";
 
+type Programme = "JAMB" | "WAEC";
+
 interface Teacher {
   id: string;
   firstName: string;
@@ -29,7 +31,8 @@ interface Enrollment {
 interface Subject {
   id: string;
   name: string;
-  description?: string;
+  description?: string | null;
+  programme: Programme;
   isActive: boolean;
   teacher?: Teacher | null;
   _count?: {
@@ -50,13 +53,14 @@ export default function AdminSubjectsPage() {
   const [enrolledStudents, setEnrolledStudents] = useState<Enrollment[]>([]);
 
   const [selectedTeacher, setSelectedTeacher] = useState("");
-
   const [selectedStudent, setSelectedStudent] = useState("");
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [programme, setProgramme] = useState<Programme | "">("");
 
   const [loading, setLoading] = useState(true);
+  const [creatingSubject, setCreatingSubject] = useState(false);
   const [savingTeacher, setSavingTeacher] = useState(false);
   const [enrollingStudent, setEnrollingStudent] = useState(false);
 
@@ -122,20 +126,39 @@ export default function AdminSubjectsPage() {
       return;
     }
 
+    if (!programme) {
+      alert("Please select whether this subject is for JAMB or WAEC.");
+      return;
+    }
+
     try {
+      setCreatingSubject(true);
+
       await api.post("/subjects", {
         name: name.trim(),
         description: description.trim(),
+        programme,
       });
 
       setName("");
       setDescription("");
+      setProgramme("");
 
       await loadSubjects();
-    } catch (error) {
+
+      alert(`${programme} subject created successfully.`);
+    } catch (error: any) {
       console.error("Failed to create subject:", error);
 
-      alert("Failed to create subject.");
+      const message = error?.response?.data?.message;
+
+      alert(
+        Array.isArray(message)
+          ? message.join(", ")
+          : message || "Failed to create subject.",
+      );
+    } finally {
+      setCreatingSubject(false);
     }
   };
 
@@ -155,10 +178,16 @@ export default function AdminSubjectsPage() {
       }
 
       await loadSubjects();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete subject:", error);
 
-      alert("Failed to delete subject.");
+      const message = error?.response?.data?.message;
+
+      alert(
+        Array.isArray(message)
+          ? message.join(", ")
+          : message || "Failed to delete subject.",
+      );
     }
   };
 
@@ -192,24 +221,28 @@ export default function AdminSubjectsPage() {
 
       await loadSubjects();
 
-      const updatedSubject = subjects.find(
-        (subject) => subject.id === selectedSubject.id,
+      const teacher = teachers.find((item) => item.id === selectedTeacher);
+
+      setSelectedSubject((current) =>
+        current
+          ? {
+              ...current,
+              teacher: teacher || null,
+            }
+          : current,
       );
 
-      if (updatedSubject) {
-        const teacher = teachers.find((item) => item.id === selectedTeacher);
-
-        setSelectedSubject({
-          ...updatedSubject,
-          teacher: teacher || null,
-        });
-      }
-
       alert("Teacher assigned successfully.");
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to assign teacher:", error);
 
-      alert("Failed to assign teacher.");
+      const message = error?.response?.data?.message;
+
+      alert(
+        Array.isArray(message)
+          ? message.join(", ")
+          : message || "Failed to assign teacher.",
+      );
     } finally {
       setSavingTeacher(false);
     }
@@ -267,7 +300,7 @@ export default function AdminSubjectsPage() {
       await loadEnrolledStudents(selectedSubject.id);
 
       await loadSubjects();
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to remove student:", error);
 
       alert("Failed to remove student.");
@@ -288,8 +321,8 @@ export default function AdminSubjectsPage() {
         <h1 className="text-3xl font-bold text-gray-800">Subject Management</h1>
 
         <p className="mt-2 text-gray-500">
-          Create subjects and control which teachers and students have access to
-          each subject.
+          Create JAMB and WAEC subjects and control which teachers and students
+          have access to each subject.
         </p>
       </div>
 
@@ -297,38 +330,97 @@ export default function AdminSubjectsPage() {
       <div className="mb-8 rounded-2xl bg-white p-6 shadow">
         <h2 className="mb-5 text-xl font-bold text-gray-800">Create Subject</h2>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <input
-            type="text"
-            placeholder="Subject Name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            className="rounded-lg border border-gray-300 p-3 outline-none focus:border-indigo-500"
-          />
+        <div className="grid gap-4 md:grid-cols-3">
+          <div>
+            <label
+              htmlFor="subject-name"
+              className="mb-2 block text-sm font-semibold text-gray-700"
+            >
+              Subject Name
+            </label>
 
-          <input
-            type="text"
-            placeholder="Description"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            className="rounded-lg border border-gray-300 p-3 outline-none focus:border-indigo-500"
-          />
+            <input
+              id="subject-name"
+              type="text"
+              placeholder="e.g. Mathematics"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 p-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
+
+          <div>
+            <label
+              htmlFor="subject-programme"
+              className="mb-2 block text-sm font-semibold text-gray-700"
+            >
+              Programme
+            </label>
+
+            <select
+              id="subject-programme"
+              value={programme}
+              onChange={(e) => setProgramme(e.target.value as Programme | "")}
+              className="w-full rounded-lg border border-gray-300 bg-white p-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            >
+              <option value="">Select programme</option>
+              <option value="JAMB">JAMB</option>
+              <option value="WAEC">WAEC</option>
+            </select>
+          </div>
+
+          <div>
+            <label
+              htmlFor="subject-description"
+              className="mb-2 block text-sm font-semibold text-gray-700"
+            >
+              Description
+            </label>
+
+            <input
+              id="subject-description"
+              type="text"
+              placeholder="Optional description"
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 p-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
+            />
+          </div>
         </div>
 
         <button
           type="button"
           onClick={createSubject}
-          className="mt-4 rounded-lg bg-indigo-600 px-5 py-3 font-semibold text-white hover:bg-indigo-700"
+          disabled={creatingSubject}
+          className="mt-4 rounded-lg bg-indigo-600 px-5 py-3 font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-50"
         >
-          Create Subject
+          {creatingSubject ? "Creating Subject..." : "Create Subject"}
         </button>
       </div>
 
       {/* SUBJECT LIST */}
       <div className="mb-8 rounded-2xl bg-white p-6 shadow">
-        <h2 className="mb-5 text-xl font-bold text-gray-800">
-          Existing Subjects
-        </h2>
+        <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h2 className="text-xl font-bold text-gray-800">
+              Existing Subjects
+            </h2>
+
+            <p className="mt-1 text-sm text-gray-500">
+              JAMB and WAEC subjects are managed separately.
+            </p>
+          </div>
+
+          <div className="flex gap-2 text-xs font-semibold">
+            <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-700">
+              JAMB
+            </span>
+
+            <span className="rounded-full bg-green-100 px-3 py-1 text-green-700">
+              WAEC
+            </span>
+          </div>
+        </div>
 
         {loading ? (
           <p className="text-indigo-600">Loading subjects...</p>
@@ -340,6 +432,8 @@ export default function AdminSubjectsPage() {
               <thead>
                 <tr className="border-b text-left">
                   <th className="px-3 py-3">Subject</th>
+
+                  <th className="px-3 py-3">Programme</th>
 
                   <th className="px-3 py-3">Teacher</th>
 
@@ -362,6 +456,18 @@ export default function AdminSubjectsPage() {
                       <div className="text-sm text-gray-500">
                         {subject.description || "No description"}
                       </div>
+                    </td>
+
+                    <td className="px-3 py-4">
+                      {subject.programme === "JAMB" ? (
+                        <span className="inline-flex rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700">
+                          JAMB
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                          WAEC
+                        </span>
+                      )}
                     </td>
 
                     <td className="px-3 py-4">
@@ -412,9 +518,21 @@ export default function AdminSubjectsPage() {
         <div className="rounded-2xl bg-white p-6 shadow">
           <div className="mb-6 flex items-start justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-gray-800">
-                Manage: {selectedSubject.name}
-              </h2>
+              <div className="flex flex-wrap items-center gap-3">
+                <h2 className="text-2xl font-bold text-gray-800">
+                  Manage: {selectedSubject.name}
+                </h2>
+
+                <span
+                  className={
+                    selectedSubject.programme === "JAMB"
+                      ? "rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-700"
+                      : "rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
+                  }
+                >
+                  {selectedSubject.programme}
+                </span>
+              </div>
 
               <p className="mt-1 text-gray-500">
                 Control teacher assignment and student enrollment.
@@ -447,13 +565,11 @@ export default function AdminSubjectsPage() {
               >
                 <option value="">Select teacher</option>
 
-                {teachers
-                  .filter((teacher) => teacher.id === selectedTeacher || true)
-                  .map((teacher) => (
-                    <option key={teacher.id} value={teacher.id}>
-                      {teacher.firstName} {teacher.lastName} — {teacher.email}
-                    </option>
-                  ))}
+                {teachers.map((teacher) => (
+                  <option key={teacher.id} value={teacher.id}>
+                    {teacher.firstName} {teacher.lastName} — {teacher.email}
+                  </option>
+                ))}
               </select>
 
               <button
