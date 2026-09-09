@@ -80,7 +80,12 @@ export class MessagesService {
    *
    * TEACHER:
    * - student enrolled in a subject taught by the teacher
-   * - another teacher teaching a shared subject
+   *
+   * NOTE:
+   * The current Prisma schema assigns one teacher to each Subject
+   * through Subject.teacherId. Therefore two different teachers
+   * cannot currently teach the same Subject. Teacher-to-teacher
+   * messaging is consequently not authorized by a shared subject.
    */
   private async canUsersMessage(
     userOneId: string,
@@ -163,63 +168,13 @@ export class MessagesService {
 
     /**
      * Teacher <-> Teacher
+     *
+     * Subject.teacherId supports only one teacher per subject.
+     * Therefore two different teachers cannot currently share
+     * the same subject assignment.
      */
     if (userOne.role === 'TEACHER' && userTwo.role === 'TEACHER') {
-      const sharedSubject = await this.prisma.subject.findFirst({
-        where: {
-          isActive: true,
-          teacherId: userOneId,
-          teachingSubjects: {
-            some: {
-              teacherId: userTwoId,
-            },
-          },
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      if (sharedSubject) {
-        return true;
-      }
-
-      /**
-       * Fallback for schemas where teacherId is the only
-       * assignment relation: check whether the two teachers
-       * teach at least one subject in common through the
-       * subject assignments.
-       */
-      const userOneSubjects = await this.prisma.subject.findMany({
-        where: {
-          teacherId: userOneId,
-          isActive: true,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      const userOneSubjectIds = userOneSubjects.map((subject) => subject.id);
-
-      if (userOneSubjectIds.length === 0) {
-        return false;
-      }
-
-      const common = await this.prisma.subject.findFirst({
-        where: {
-          id: {
-            in: userOneSubjectIds,
-          },
-          teacherId: userTwoId,
-          isActive: true,
-        },
-        select: {
-          id: true,
-        },
-      });
-
-      return !!common;
+      return false;
     }
 
     return false;

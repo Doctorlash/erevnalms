@@ -1,4 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   BadRequestException,
   ConflictException,
@@ -19,20 +18,13 @@ export class SubjectsService {
    * ADMIN
    * CREATE SUBJECT
    * ============================================================
-   *
-   * Subjects belong to a specific programme:
-   *
-   * JAMB -> JAMB subjects
-   * WAEC -> WAEC subjects
-   *
-   * Leadership Academy has been permanently removed.
    */
   async create(data: {
     name: string;
     description?: string;
     programme: StudentProgrammeType;
   }) {
-    const name = data.name.trim();
+    const name = data?.name?.trim();
 
     if (!name) {
       throw new BadRequestException('Subject name is required.');
@@ -85,8 +77,6 @@ export class SubjectsService {
    * ADMIN
    * GET ALL SUBJECTS
    * ============================================================
-   *
-   * Can optionally be filtered by programme.
    */
   async findAll(programme?: StudentProgrammeType) {
     if (
@@ -129,6 +119,13 @@ export class SubjectsService {
       ],
     });
   }
+
+  /**
+   * ============================================================
+   * STUDENT
+   * GET AVAILABLE SUBJECTS
+   * ============================================================
+   */
   async availableForStudent(programme: StudentProgrammeType) {
     if (
       programme !== StudentProgrammeType.JAMB &&
@@ -162,12 +159,19 @@ export class SubjectsService {
       },
     });
   }
+
+  /**
+   * ============================================================
+   * TEACHER
+   * GET AVAILABLE SUBJECTS
+   * ============================================================
+   */
   async availableForTeacher(programme: StudentProgrammeType) {
     if (
       programme !== StudentProgrammeType.JAMB &&
       programme !== StudentProgrammeType.WAEC
     ) {
-      throw new BadRequestException('Programme must be JAMB or WAEC');
+      throw new BadRequestException('Programme must be JAMB or WAEC.');
     }
 
     return this.prisma.subject.findMany({
@@ -195,6 +199,13 @@ export class SubjectsService {
       },
     });
   }
+
+  /**
+   * ============================================================
+   * PUBLIC REGISTRATION
+   * GET SUBJECTS FOR REGISTRATION
+   * ============================================================
+   */
   async availableForRegistration(programme: StudentProgrammeType) {
     if (
       programme !== StudentProgrammeType.JAMB &&
@@ -219,17 +230,12 @@ export class SubjectsService {
       },
     });
   }
+
   /**
    * ============================================================
    * STUDENT
    * GET MY SUBJECTS
    * ============================================================
-   *
-   * Returns ONLY subjects for which the authenticated student
-   * has an approved enrollment.
-   *
-   * The programme is included so the frontend knows whether
-   * the subject belongs to JAMB or WAEC.
    */
   async studentSubjects(userId: string) {
     const now = new Date();
@@ -297,9 +303,6 @@ export class SubjectsService {
    * STUDENT
    * GET ONE SUBJECT
    * ============================================================
-   *
-   * A student can only access a subject if an enrollment exists
-   * for that authenticated student.
    */
   async studentSubject(userId: string, subjectId: string) {
     const now = new Date();
@@ -360,7 +363,9 @@ export class SubjectsService {
       subject: enrollment.subject,
     };
   }
-  /*===========================================================
+
+  /**
+   * ============================================================
    * ADMIN
    * GET ONE SUBJECT
    * ============================================================
@@ -400,18 +405,81 @@ export class SubjectsService {
   /**
    * ============================================================
    * ADMIN
-   * DELETE SUBJECT
+   * DEACTIVATE / DELETE SUBJECT
    * ============================================================
+   *
+   * Subjects without dependent records may be physically deleted.
+   *
+   * Subjects that already have related records are deactivated
+   * instead. This prevents PostgreSQL foreign-key violations and
+   * protects historical LMS data.
    */
   async delete(id: string) {
     const subject = await this.prisma.subject.findUnique({
       where: {
         id,
       },
+      include: {
+        _count: {
+          select: {
+            enrollments: true,
+            topics: true,
+            Lesson: true,
+            questions: true,
+            resources: true,
+            assignments: true,
+            announcements: true,
+            communityPosts: true,
+            DiscussionThread: true,
+            teacherApplications: true,
+            subjectRequests: true,
+            Exam: true,
+            LiveClass: true,
+            certificates: true,
+          },
+        },
+      },
     });
 
     if (!subject) {
       throw new NotFoundException('Subject not found.');
+    }
+
+    const hasDependencies =
+      subject._count.enrollments > 0 ||
+      subject._count.topics > 0 ||
+      subject._count.Lesson > 0 ||
+      subject._count.questions > 0 ||
+      subject._count.resources > 0 ||
+      subject._count.assignments > 0 ||
+      subject._count.announcements > 0 ||
+      subject._count.communityPosts > 0 ||
+      subject._count.DiscussionThread > 0 ||
+      subject._count.teacherApplications > 0 ||
+      subject._count.subjectRequests > 0 ||
+      subject._count.Exam > 0 ||
+      subject._count.LiveClass > 0 ||
+      subject._count.certificates > 0;
+
+    if (hasDependencies) {
+      return this.prisma.subject.update({
+        where: {
+          id,
+        },
+        data: {
+          isActive: false,
+        },
+        include: {
+          teacher: {
+            select: {
+              id: true,
+              firstName: true,
+              lastName: true,
+              email: true,
+            },
+          },
+        },
+      });
     }
 
     return this.prisma.subject.delete({
