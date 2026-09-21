@@ -1,18 +1,18 @@
+/* eslint-disable @typescript-eslint/no-unsafe-return */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
   Injectable,
   NotFoundException,
   BadRequestException,
 } from '@nestjs/common';
 
-import { CertificatesService } from '../certificates/certificates.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class ExamAttemptsService {
-  constructor(
-    private prisma: PrismaService,
-    private certificatesService: CertificatesService,
-  ) {}
+  constructor(private prisma: PrismaService) {}
 
   async startExam(examId: string, userId: string) {
     const exam = await this.prisma.exam.findUnique({
@@ -91,6 +91,7 @@ export class ExamAttemptsService {
       },
       include: {
         answers: true,
+        exam: true,
       },
     });
 
@@ -102,11 +103,16 @@ export class ExamAttemptsService {
       throw new BadRequestException('Exam already submitted');
     }
 
+    const totalQuestions = attempt.answers.length;
+
     const correctAnswers = attempt.answers.filter(
       (answer) => answer.isCorrect,
     ).length;
 
-    const score = correctAnswers;
+    const score =
+      totalQuestions > 0
+        ? Math.round((correctAnswers / totalQuestions) * 100)
+        : 0;
 
     const completedAttempt = await this.prisma.examAttempt.update({
       where: {
@@ -118,21 +124,25 @@ export class ExamAttemptsService {
         submittedAt: new Date(),
       },
       include: {
-        exam: true,
+        exam: {
+          include: {
+            subject: true,
+            cohort: true,
+          },
+        },
         user: true,
       },
     });
 
-    // =========================================================
-    // AUTOMATIC CERTIFICATE GENERATION
-    // =========================================================
-
-    const certificate =
-      await this.certificatesService.generateForPassedExam(attemptId);
-
     return {
       ...completedAttempt,
-      certificate,
+      statistics: {
+        totalQuestions,
+        correctAnswers,
+        wrongAnswers: totalQuestions - correctAnswers,
+        percentage: score,
+        passed: score >= 50,
+      },
     };
   }
 
@@ -146,6 +156,7 @@ export class ExamAttemptsService {
         exam: {
           include: {
             subject: true,
+            cohort: true,
           },
         },
         answers: {
@@ -184,6 +195,7 @@ export class ExamAttemptsService {
         id: attempt.exam.id,
         title: attempt.exam.title,
         subject: attempt.exam.subject,
+        cohort: attempt.exam.cohort,
       },
 
       score: attempt.score,
@@ -199,6 +211,7 @@ export class ExamAttemptsService {
           totalQuestions > 0
             ? Math.round((correctAnswers / totalQuestions) * 100)
             : 0,
+        passed: attempt.completed && attempt.score >= 50,
       },
 
       answers: attempt.answers,
@@ -224,6 +237,7 @@ export class ExamAttemptsService {
         exam: {
           include: {
             subject: true,
+            cohort: true,
           },
         },
         answers: true,
@@ -238,7 +252,12 @@ export class ExamAttemptsService {
     return this.prisma.examAttempt.findMany({
       include: {
         user: true,
-        exam: true,
+        exam: {
+          include: {
+            subject: true,
+            cohort: true,
+          },
+        },
       },
       orderBy: {
         startedAt: 'desc',
@@ -253,7 +272,12 @@ export class ExamAttemptsService {
       },
       include: {
         user: true,
-        exam: true,
+        exam: {
+          include: {
+            subject: true,
+            cohort: true,
+          },
+        },
       },
       orderBy: {
         startedAt: 'desc',
@@ -271,10 +295,8 @@ export class ExamAttemptsService {
         },
         completed: true,
       },
-
       include: {
         user: true,
-
         exam: {
           include: {
             subject: true,
@@ -301,7 +323,8 @@ export class ExamAttemptsService {
     const passRate =
       totalAttempts > 0
         ? Math.round(
-            (attempts.filter((a) => a.score >= 50).length / totalAttempts) *
+            (attempts.filter((attempt) => attempt.score >= 50).length /
+              totalAttempts) *
               100,
           )
         : 0;

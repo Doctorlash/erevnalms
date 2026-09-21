@@ -26,9 +26,19 @@ export default function AdminSidebar() {
       icon: "👨‍🏫",
     },
     {
+      name: "Cohorts",
+      href: "/dashboard/admin/cohorts",
+      icon: "👥",
+    },
+    {
       name: "Subscriptions",
       href: "/dashboard/admin/subscriptions",
       icon: "💳",
+    },
+    {
+      name: "Payments",
+      href: "/dashboard/admin/payments",
+      icon: "💰",
     },
     {
       name: "Contact Messages",
@@ -46,7 +56,7 @@ export default function AdminSidebar() {
       icon: "📝",
     },
     {
-      name: "subject Requests",
+      name: "Subject Requests",
       href: "/dashboard/admin/subject-requests",
       icon: "📩",
     },
@@ -104,7 +114,6 @@ export default function AdminSidebar() {
             `}
           >
             <span className="text-lg">{item.icon}</span>
-
             <span>{item.name}</span>
           </Link>
         );

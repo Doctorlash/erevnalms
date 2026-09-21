@@ -21,6 +21,7 @@ import { LiveClassesModule } from './live-classes/live-classes.module';
 import { AssignmentsModule } from './assignments/assignments.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { CohortsModule } from './cohorts/cohorts.module';
 import { TeacherDashboardModule } from './teacher-dashboard/teacher-dashboard.module';
 import { StudentDashboardModule } from './student-dashboard/student-dashboard.module';
 import { AdminDashboardModule } from './admin-dashboard/admin-dashboard.module';
@@ -59,6 +60,7 @@ import { SubjectRequestsModule } from './subject-requests/subject-requests.modul
     AnnouncementsModule,
     NotificationsModule,
     TeacherDashboardModule,
+    CohortsModule,
     StudentDashboardModule,
     AdminDashboardModule,
     CertificatesModule,

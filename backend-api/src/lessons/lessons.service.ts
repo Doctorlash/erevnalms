@@ -5,18 +5,18 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 
-import { EnrollmentType } from '@prisma/client';
+import { EnrollmentType, Prisma, StudentCohortStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateLessonDto } from './dto/create-lesson.dto';
 
 @Injectable()
 export class LessonsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   // ============================================================
   // HELPER
-  // CHECK ACTIVE SUBJECT ACCESS
+  // CHECK CURRENT SUBJECT ACCESS
   // ============================================================
 
   private async requireActiveEnrollment(userId: string, subjectId: string) {
@@ -29,18 +29,62 @@ export class LessonsService {
           subjectId,
         },
       },
+      include: {
+        subject: {
+          select: {
+            id: true,
+            programme: true,
+            isActive: true,
+          },
+        },
+        studentCohort: {
+          select: {
+            id: true,
+            userId: true,
+            status: true,
+            cohortId: true,
+            cohort: {
+              select: {
+                id: true,
+                programme: true,
+                status: true,
+                startDate: true,
+                endDate: true,
+              },
+            },
+            subscriptions: {
+              where: {
+                status: 'ACTIVE',
+              },
+              select: {
+                id: true,
+                status: true,
+                startDate: true,
+                endDate: true,
+              },
+              take: 1,
+            },
+          },
+        },
+      },
     });
 
     if (!enrollment) {
       throw new ForbiddenException('You are not enrolled in this subject.');
     }
 
+    if (!enrollment.subject.isActive) {
+      throw new ForbiddenException('This subject is currently inactive.');
+    }
+
     // ----------------------------------------------------------
-    // PAID ACCESS
+    // PROGRAMME CONSISTENCY
     // ----------------------------------------------------------
 
-    if (enrollment.type === EnrollmentType.PAID) {
-      return enrollment;
+    if (enrollment.programme !== enrollment.subject.programme) {
+      throw new ForbiddenException(
+        'Your enrollment is not valid for this subject programme.',
+      );
     }
 
     // ----------------------------------------------------------
@@ -52,6 +96,88 @@ export class LessonsService {
         throw new ForbiddenException(
           'Your free access to this subject has expired. Please subscribe or make payment to continue.',
         );
+      }
+
+      return enrollment;
+    }
+
+    // ----------------------------------------------------------
+    // PAID ACCESS
+    // ----------------------------------------------------------
+
+    if (enrollment.type === EnrollmentType.PAID) {
+      const studentCohort = enrollment.studentCohort;
+
+      if (!studentCohort) {
+        throw new ForbiddenException(
+          'Your paid enrollment is not linked to a cohort.',
+        );
+      }
+
+      if (studentCohort.userId !== userId) {
+        throw new ForbiddenException(
+          'This cohort membership does not belong to you.',
+        );
+      }
+
+      if (studentCohort.status !== StudentCohortStatus.ACTIVE) {
+        throw new ForbiddenException(
+          'Your access to this cohort is not currently active.',
+        );
+      }
+
+      const cohort = studentCohort.cohort;
+
+      if (!cohort) {
+        throw new ForbiddenException(
+          'Your paid enrollment is not linked to a valid cohort.',
+        );
+      }
+
+      if (cohort.programme !== enrollment.subject.programme) {
+        throw new ForbiddenException(
+          'Your cohort programme does not match this subject programme.',
+        );
+      }
+
+      if (cohort.status === 'CANCELLED') {
+        throw new ForbiddenException('This cohort has been cancelled.');
+      }
+
+      if (now < cohort.startDate) {
+        throw new ForbiddenException('This cohort has not started yet.');
+      }
+
+      if (now >= cohort.endDate) {
+        throw new ForbiddenException(
+          'This cohort has ended. Your access to this subject has expired.',
+        );
+      }
+
+      if (!enrollment.expiresAt || enrollment.expiresAt <= now) {
+        throw new ForbiddenException('Your paid enrollment has expired.');
+      }
+
+      const subscription = studentCohort.subscriptions[0];
+
+      if (!subscription) {
+        throw new ForbiddenException(
+          'Your paid subscription is not currently active.',
+        );
+      }
+
+      if (subscription.status !== 'ACTIVE') {
+        throw new ForbiddenException(
+          'Your paid subscription is not currently active.',
+        );
+      }
+
+      if (!subscription.endDate || subscription.endDate <= now) {
+        throw new ForbiddenException('Your subscription has expired.');
+      }
+
+      if (subscription.startDate && subscription.startDate > now) {
+        throw new ForbiddenException('Your subscription has not started yet.');
       }
 
       return enrollment;
@@ -133,37 +259,38 @@ export class LessonsService {
    * STUDENT
    * GET ALL PUBLISHED LESSONS
    * ============================================================
-   *
-   * Only lessons belonging to subjects for which the student
-   * has active access are returned.
    */
 
   async findAll(userId: string) {
-    const now = new Date();
-
     const enrollments = await this.prisma.enrollment.findMany({
       where: {
         userId,
-        OR: [
-          {
-            type: EnrollmentType.PAID,
-          },
-          {
-            type: EnrollmentType.FREE,
-            expiresAt: {
-              gt: now,
-            },
-          },
-        ],
+        subject: {
+          isActive: true,
+        },
       },
       select: {
         subjectId: true,
       },
     });
 
-    const subjectIds = enrollments.map((enrollment) => enrollment.subjectId);
+    const accessibleSubjectIds: string[] = [];
 
-    if (subjectIds.length === 0) {
+    for (const enrollment of enrollments) {
+      try {
+        await this.requireActiveEnrollment(userId, enrollment.subjectId);
+
+        accessibleSubjectIds.push(enrollment.subjectId);
+      } catch (error) {
+        if (error instanceof ForbiddenException) {
+          continue;
+        }
+
+        throw error;
+      }
+    }
+
+    if (accessibleSubjectIds.length === 0) {
       return [];
     }
 
@@ -172,7 +299,7 @@ export class LessonsService {
         status: 'APPROVED',
         isPublished: true,
         subjectId: {
-          in: subjectIds,
+          in: accessibleSubjectIds,
         },
       },
 
@@ -264,7 +391,6 @@ export class LessonsService {
       throw new NotFoundException('Topic not found');
     }
 
-    // Check active enrollment before returning lessons.
     await this.requireActiveEnrollment(userId, topic.subjectId);
 
     return this.prisma.lesson.findMany({
@@ -587,7 +713,6 @@ export class LessonsService {
       throw new NotFoundException('Lesson not found');
     }
 
-    // Check active enrollment before returning content.
     if (!lesson.subjectId) {
       throw new ForbiddenException('This lesson is not linked to a subject.');
     }

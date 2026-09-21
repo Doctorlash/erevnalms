@@ -1,84 +1,289 @@
-/* eslint-disable @typescript-eslint/no-unsafe-return */
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+
+import { SubscriptionStatus } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { PaymentsService } from '../payments/payments.service';
 
-import {
-  InitializePaymentDto,
-  SubscriptionPlan,
-} from '../payments/dto/initialize-payment.dto';
-
-import { CreateSubscriptionDto } from './dto/create-subscription.dto';
+interface AuthenticatedUser {
+  id: string;
+  role?: string;
+}
 
 @Injectable()
 export class SubscriptionsService {
-  constructor(
-    private prisma: PrismaService,
-    private paymentsService: PaymentsService,
-  ) {}
-
-  // =========================================================
-  // CREATE SUBSCRIPTION
-  // =========================================================
-
-  async create(dto: CreateSubscriptionDto) {
-    const user = await this.prisma.user.findUnique({
-      where: {
-        id: dto.userId,
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    return this.prisma.subscription.create({
-      data: {
-        userId: dto.userId,
-        plan: dto.plan,
-        status: 'PENDING',
-      },
-    });
-  }
+  constructor(private readonly prisma: PrismaService) {}
 
   // =========================================================
   // FIND ALL SUBSCRIPTIONS
+  // ADMIN USE
   // =========================================================
 
-  async findAll() {
-    return this.prisma.subscription.findMany({
-      include: {
-        user: true,
-      },
+  async findAll(authenticatedUser: AuthenticatedUser) {
+    this.requireAdmin(authenticatedUser);
+
+    const subscriptions = await this.prisma.subscription.findMany({
       orderBy: {
         createdAt: 'desc',
       },
+
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+
+        cohort: true,
+
+        studentCohort: {
+          include: {
+            cohort: true,
+          },
+        },
+
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
     });
+
+    return this.expireSubscriptions(subscriptions);
   }
 
   // =========================================================
-  // FIND USER SUBSCRIPTIONS
+  // FIND CURRENT USER SUBSCRIPTIONS
   // =========================================================
 
-  async findByUser(userId: string) {
+  async findMySubscriptions(authenticatedUser: AuthenticatedUser) {
+    this.requireAuthenticatedUser(authenticatedUser);
+
     const subscriptions = await this.prisma.subscription.findMany({
       where: {
-        userId,
+        userId: authenticatedUser.id,
       },
+
       orderBy: {
         createdAt: 'desc',
       },
+
       include: {
-        user: true,
+        cohort: true,
+
+        studentCohort: {
+          include: {
+            cohort: true,
+          },
+        },
+
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
       },
     });
 
+    return this.expireSubscriptions(subscriptions);
+  }
+
+  // =========================================================
+  // FIND ONE SUBSCRIPTION
+  // =========================================================
+
+  async findOne(id: string, authenticatedUser: AuthenticatedUser) {
+    this.requireAuthenticatedUser(authenticatedUser);
+
+    const subscription = await this.prisma.subscription.findUnique({
+      where: {
+        id,
+      },
+
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            firstName: true,
+            lastName: true,
+            role: true,
+          },
+        },
+
+        cohort: true,
+
+        studentCohort: {
+          include: {
+            cohort: true,
+          },
+        },
+
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('Subscription not found.');
+    }
+
+    // -------------------------------------------------------
+    // OWNERSHIP
+    // -------------------------------------------------------
+
+    if (
+      subscription.userId !== authenticatedUser.id &&
+      authenticatedUser.role !== 'ADMIN'
+    ) {
+      throw new UnauthorizedException(
+        'You are not authorized to view this subscription.',
+      );
+    }
+
+    // -------------------------------------------------------
+    // EXPIRE WHEN COHORT/SUBSCRIPTION ENDS
+    // -------------------------------------------------------
+
+    if (
+      subscription.status === SubscriptionStatus.ACTIVE &&
+      subscription.endDate &&
+      subscription.endDate <= new Date()
+    ) {
+      return this.prisma.subscription.update({
+        where: {
+          id: subscription.id,
+        },
+
+        data: {
+          status: SubscriptionStatus.EXPIRED,
+        },
+
+        include: {
+          user: {
+            select: {
+              id: true,
+              email: true,
+              firstName: true,
+              lastName: true,
+              role: true,
+            },
+          },
+
+          cohort: true,
+
+          studentCohort: {
+            include: {
+              cohort: true,
+            },
+          },
+
+          payments: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
+        },
+      });
+    }
+
+    return subscription;
+  }
+
+  // =========================================================
+  // FIND SUBSCRIPTION FOR A SPECIFIC COHORT
+  // =========================================================
+
+  async findMyCohortSubscription(
+    cohortId: string,
+    authenticatedUser: AuthenticatedUser,
+  ) {
+    this.requireAuthenticatedUser(authenticatedUser);
+
+    const subscription = await this.prisma.subscription.findFirst({
+      where: {
+        userId: authenticatedUser.id,
+        cohortId,
+      },
+
+      orderBy: {
+        createdAt: 'desc',
+      },
+
+      include: {
+        cohort: true,
+
+        studentCohort: true,
+
+        payments: {
+          orderBy: {
+            createdAt: 'desc',
+          },
+        },
+      },
+    });
+
+    if (!subscription) {
+      throw new NotFoundException('No subscription exists for this cohort.');
+    }
+
+    if (
+      subscription.status === SubscriptionStatus.ACTIVE &&
+      subscription.endDate &&
+      subscription.endDate <= new Date()
+    ) {
+      return this.prisma.subscription.update({
+        where: {
+          id: subscription.id,
+        },
+
+        data: {
+          status: SubscriptionStatus.EXPIRED,
+        },
+
+        include: {
+          cohort: true,
+          studentCohort: true,
+
+          payments: {
+            orderBy: {
+              createdAt: 'desc',
+            },
+          },
+        },
+      });
+    }
+
+    return subscription;
+  }
+
+  // =========================================================
+  // EXPIRE SUBSCRIPTIONS
+  // =========================================================
+
+  private async expireSubscriptions<
+    T extends {
+      id: string;
+      status: SubscriptionStatus;
+      endDate: Date | null;
+    },
+  >(subscriptions: T[]) {
     const now = new Date();
 
     for (const subscription of subscriptions) {
       if (
-        subscription.status === 'ACTIVE' &&
+        subscription.status === SubscriptionStatus.ACTIVE &&
         subscription.endDate &&
         subscription.endDate <= now
       ) {
@@ -86,12 +291,13 @@ export class SubscriptionsService {
           where: {
             id: subscription.id,
           },
+
           data: {
-            status: 'EXPIRED',
+            status: SubscriptionStatus.EXPIRED,
           },
         });
 
-        subscription.status = 'EXPIRED';
+        subscription.status = SubscriptionStatus.EXPIRED;
       }
     }
 
@@ -99,70 +305,24 @@ export class SubscriptionsService {
   }
 
   // =========================================================
-  // INITIALIZE PAYMENT
+  // AUTHENTICATION
   // =========================================================
 
-  async initializePayment(subscriptionId: string) {
-    const subscription = await this.prisma.subscription.findUnique({
-      where: {
-        id: subscriptionId,
-      },
-      include: {
-        user: true,
-      },
-    });
-
-    if (!subscription) {
-      throw new NotFoundException('Subscription not found');
+  private requireAuthenticatedUser(authenticatedUser: AuthenticatedUser) {
+    if (!authenticatedUser?.id) {
+      throw new UnauthorizedException('Authenticated user is required.');
     }
-
-    const dto: InitializePaymentDto = {
-      userId: subscription.userId,
-      email: subscription.user.email,
-      plan: subscription.plan as SubscriptionPlan,
-    };
-
-    return this.paymentsService.initialize(dto);
   }
 
   // =========================================================
-  // VERIFY PAYMENT
+  // ADMIN AUTHORIZATION
   // =========================================================
 
-  async verifyPayment(reference: string) {
-    return this.paymentsService.verify(reference);
-  }
+  private requireAdmin(authenticatedUser: AuthenticatedUser) {
+    this.requireAuthenticatedUser(authenticatedUser);
 
-  // =========================================================
-  // ACTIVATE SUBSCRIPTION
-  // =========================================================
-
-  async activate(id: string) {
-    const subscription = await this.prisma.subscription.findUnique({
-      where: {
-        id,
-      },
-    });
-
-    if (!subscription) {
-      throw new NotFoundException('Subscription not found');
+    if (authenticatedUser.role !== 'ADMIN') {
+      throw new UnauthorizedException('Administrator access is required.');
     }
-
-    const now = new Date();
-
-    const endDate = new Date(now);
-
-    endDate.setMonth(endDate.getMonth() + 1);
-
-    return this.prisma.subscription.update({
-      where: {
-        id,
-      },
-      data: {
-        status: 'ACTIVE',
-        startDate: now,
-        endDate,
-      },
-    });
   }
 }

@@ -1,4 +1,6 @@
 /* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable @next/next/no-img-element */
+
 import { ReactNode, useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
@@ -38,9 +40,7 @@ export default function StudentLayout({ children }: Props) {
       .trim()
       .toUpperCase() || "S";
 
-  // =========================================================
-  // LOAD UNREAD NOTIFICATION COUNT
-  // =========================================================
+  const profileImage = user?.profileImage || "";
 
   const loadNotificationCount = useCallback(async () => {
     if (!userId) {
@@ -69,10 +69,6 @@ export default function StudentLayout({ children }: Props) {
     }
   }, [userId]);
 
-  // =========================================================
-  // LOAD COUNT WHEN STUDENT LOGS IN
-  // =========================================================
-
   useEffect(() => {
     if (!userId) {
       setUnreadCount(0);
@@ -81,10 +77,6 @@ export default function StudentLayout({ children }: Props) {
 
     loadNotificationCount();
 
-    /*
-     * Refresh periodically so newly-created notifications
-     * appear in the header without requiring a page refresh.
-     */
     const interval = window.setInterval(() => {
       loadNotificationCount();
     }, 30000);
@@ -93,10 +85,6 @@ export default function StudentLayout({ children }: Props) {
       window.clearInterval(interval);
     };
   }, [userId, loadNotificationCount]);
-
-  // =========================================================
-  // REFRESH COUNT WHEN RETURNING TO THE TAB
-  // =========================================================
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -112,10 +100,6 @@ export default function StudentLayout({ children }: Props) {
     };
   }, [loadNotificationCount]);
 
-  // =========================================================
-  // NOTIFICATION PAGE
-  // =========================================================
-
   const openNotifications = () => {
     setMobileMenuOpen(false);
     router.push("/dashboard/notifications");
@@ -123,9 +107,7 @@ export default function StudentLayout({ children }: Props) {
 
   return (
     <div className="h-screen overflow-hidden bg-slate-100 flex">
-      {/* =====================================================
-          DESKTOP SIDEBAR
-      ====================================================== */}
+      {/* DESKTOP SIDEBAR */}
 
       <aside className="hidden lg:flex h-screen w-72 shrink-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl flex-col relative">
         <div className="pointer-events-none absolute top-0 left-0 right-0 h-40 bg-blue-500/10 blur-3xl" />
@@ -162,9 +144,17 @@ export default function StudentLayout({ children }: Props) {
           <div className="group rounded-2xl bg-white/[0.06] border border-white/10 p-4 transition-all duration-200 hover:bg-white/[0.09] hover:border-white/15">
             <div className="flex items-center gap-3">
               <div className="relative shrink-0">
-                <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-900/30">
-                  {initials}
-                </div>
+                {profileImage ? (
+                  <img
+                    src={profileImage}
+                    alt={`${firstName} ${lastName}`.trim() || "Student"}
+                    className="h-12 w-12 rounded-full object-cover shadow-lg shadow-blue-900/30 ring-2 ring-white/10"
+                  />
+                ) : (
+                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-900/30">
+                    {initials}
+                  </div>
+                )}
 
                 <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-400 border-2 border-slate-900" />
               </div>
@@ -212,9 +202,7 @@ export default function StudentLayout({ children }: Props) {
         </div>
       </aside>
 
-      {/* =====================================================
-          MOBILE SIDEBAR OVERLAY
-      ====================================================== */}
+      {/* MOBILE SIDEBAR OVERLAY */}
 
       {mobileMenuOpen && (
         <div
@@ -224,9 +212,7 @@ export default function StudentLayout({ children }: Props) {
         />
       )}
 
-      {/* =====================================================
-          MOBILE SIDEBAR
-      ====================================================== */}
+      {/* MOBILE SIDEBAR */}
 
       <aside
         className={`fixed inset-y-0 left-0 z-[70] w-[290px] max-w-[85vw] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl transform transition-transform duration-300 ease-out lg:hidden ${
@@ -270,9 +256,17 @@ export default function StudentLayout({ children }: Props) {
             <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-4">
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
-                  <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold">
-                    {initials}
-                  </div>
+                  {profileImage ? (
+                    <img
+                      src={profileImage}
+                      alt={`${firstName} ${lastName}`.trim() || "Student"}
+                      className="h-11 w-11 rounded-full object-cover ring-1 ring-white/10"
+                    />
+                  ) : (
+                    <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold">
+                      {initials}
+                    </div>
+                  )}
 
                   <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-400 border-2 border-slate-900" />
                 </div>
@@ -308,9 +302,7 @@ export default function StudentLayout({ children }: Props) {
         </div>
       </aside>
 
-      {/* =====================================================
-          MAIN APPLICATION
-      ====================================================== */}
+      {/* MAIN APPLICATION */}
 
       <div className="min-w-0 min-h-0 flex-1 flex flex-col">
         <header className="shrink-0 sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-200/80 shadow-[0_1px_12px_rgba(15,23,42,0.04)]">
@@ -398,9 +390,17 @@ export default function StudentLayout({ children }: Props) {
                 </div>
 
                 <div className="relative">
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold shadow-sm">
-                    {initials}
-                  </div>
+                  {profileImage ? (
+                    <img
+                      src={profileImage}
+                      alt={`${firstName} ${lastName}`.trim() || "Student"}
+                      className="h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-indigo-100"
+                    />
+                  ) : (
+                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold shadow-sm">
+                      {initials}
+                    </div>
+                  )}
 
                   <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-white" />
                 </div>
@@ -409,9 +409,17 @@ export default function StudentLayout({ children }: Props) {
               {/* MOBILE USER */}
 
               <div className="sm:hidden relative">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold">
-                  {initials}
-                </div>
+                {profileImage ? (
+                  <img
+                    src={profileImage}
+                    alt={`${firstName} ${lastName}`.trim() || "Student"}
+                    className="h-10 w-10 rounded-full object-cover ring-2 ring-indigo-100"
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold">
+                    {initials}
+                  </div>
+                )}
 
                 <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-white" />
               </div>
@@ -433,8 +441,6 @@ export default function StudentLayout({ children }: Props) {
       </div>
 
       <MessageWidget />
-
-      {/* CUSTOM SCROLLBAR */}
 
       <style jsx global>{`
         .custom-scrollbar {
@@ -464,10 +470,6 @@ export default function StudentLayout({ children }: Props) {
   );
 }
 
-/* =========================================================
-   BELL ICON
-========================================================= */
-
 function BellIcon() {
   return (
     <svg
@@ -488,10 +490,6 @@ function BellIcon() {
   );
 }
 
-/* =========================================================
-   MENU ICON
-========================================================= */
-
 function MenuIcon() {
   return (
     <svg
@@ -511,10 +509,6 @@ function MenuIcon() {
     </svg>
   );
 }
-
-/* =========================================================
-   CLOSE ICON
-========================================================= */
 
 function CloseIcon() {
   return (

@@ -63,12 +63,23 @@ export default function AdminSubjectsPage() {
   const [creatingSubject, setCreatingSubject] = useState(false);
   const [savingTeacher, setSavingTeacher] = useState(false);
   const [enrollingStudent, setEnrollingStudent] = useState(false);
+  const [deletingSubject, setDeletingSubject] = useState<string | null>(null);
 
   const loadSubjects = async () => {
     try {
       const res = await api.get<Subject[]>("/subjects");
 
       setSubjects(res.data);
+
+      /**
+       * Keep the management panel synchronized with the
+       * latest subject information.
+       */
+      setSelectedSubject((current) => {
+        if (!current) return null;
+
+        return res.data.find((subject) => subject.id === current.id) || null;
+      });
     } catch (error) {
       console.error("Failed to load subjects:", error);
     }
@@ -120,6 +131,11 @@ export default function AdminSubjectsPage() {
     loadData();
   }, []);
 
+  /**
+   * ============================================================
+   * CREATE SUBJECT
+   * ============================================================
+   */
   const createSubject = async () => {
     if (!name.trim()) {
       alert("Subject name is required.");
@@ -134,10 +150,12 @@ export default function AdminSubjectsPage() {
     try {
       setCreatingSubject(true);
 
+      const selectedProgramme = programme;
+
       await api.post("/subjects", {
         name: name.trim(),
         description: description.trim(),
-        programme,
+        programme: selectedProgramme,
       });
 
       setName("");
@@ -146,7 +164,7 @@ export default function AdminSubjectsPage() {
 
       await loadSubjects();
 
-      alert(`${programme} subject created successfully.`);
+      alert(`${selectedProgramme} subject created successfully.`);
     } catch (error: any) {
       console.error("Failed to create subject:", error);
 
@@ -162,35 +180,74 @@ export default function AdminSubjectsPage() {
     }
   };
 
-  const deleteSubject = async (subjectId: string) => {
+  /**
+   * ============================================================
+   * DELETE / DEACTIVATE SUBJECT
+   * ============================================================
+   *
+   * The backend decides whether the subject can be physically
+   * deleted or must be deactivated because it has dependent data.
+   */
+  const deleteSubject = async (subject: Subject) => {
+    if (deletingSubject) return;
+
+    const hasExistingData =
+      (subject._count?.enrollments ?? 0) > 0 ||
+      (subject._count?.topics ?? 0) > 0;
+
     const confirmed = confirm(
-      "Delete this subject? This action cannot be undone.",
+      hasExistingData
+        ? `This ${subject.programme} subject already has students or topics associated with it.\n\nIt will be deactivated rather than permanently deleted.\n\nContinue?`
+        : `Permanently delete ${subject.name} (${subject.programme})?\n\nThis cannot be undone.`,
     );
 
     if (!confirmed) return;
 
     try {
-      await api.delete(`/subjects/${subjectId}`);
+      setDeletingSubject(subject.id);
 
-      if (selectedSubject?.id === subjectId) {
+      const res = await api.delete(`/subjects/${subject.id}`);
+
+      /**
+       * If the backend deactivated the subject, it will return
+       * the updated subject with isActive = false.
+       */
+      if (res.data?.isActive === false) {
+        alert(
+          `${subject.name} (${subject.programme}) has been deactivated. It is no longer available to students for registration.`,
+        );
+      } else {
+        alert(
+          `${subject.name} (${subject.programme}) was permanently deleted.`,
+        );
+      }
+
+      if (selectedSubject?.id === subject.id) {
         setSelectedSubject(null);
         setEnrolledStudents([]);
       }
 
       await loadSubjects();
     } catch (error: any) {
-      console.error("Failed to delete subject:", error);
+      console.error("Failed to delete/deactivate subject:", error);
 
       const message = error?.response?.data?.message;
 
       alert(
         Array.isArray(message)
           ? message.join(", ")
-          : message || "Failed to delete subject.",
+          : message || "Failed to delete or deactivate subject.",
       );
+    } finally {
+      setDeletingSubject(null);
     }
   };
 
+  /**
+   * ============================================================
+   * SELECT SUBJECT
+   * ============================================================
+   */
   const selectSubject = async (subject: Subject) => {
     setSelectedSubject(subject);
 
@@ -201,9 +258,21 @@ export default function AdminSubjectsPage() {
     await loadEnrolledStudents(subject.id);
   };
 
+  /**
+   * ============================================================
+   * ASSIGN TEACHER
+   * ============================================================
+   */
   const assignTeacher = async () => {
     if (!selectedSubject) {
       alert("Select a subject first.");
+      return;
+    }
+
+    if (!selectedSubject.isActive) {
+      alert(
+        "This subject is inactive. Activate it before assigning a teacher.",
+      );
       return;
     }
 
@@ -248,9 +317,21 @@ export default function AdminSubjectsPage() {
     }
   };
 
+  /**
+   * ============================================================
+   * ENROLL STUDENT
+   * ============================================================
+   */
   const enrollStudent = async () => {
     if (!selectedSubject) {
       alert("Select a subject first.");
+      return;
+    }
+
+    if (!selectedSubject.isActive) {
+      alert(
+        "This subject is inactive and cannot receive new student enrollments.",
+      );
       return;
     }
 
@@ -287,6 +368,11 @@ export default function AdminSubjectsPage() {
     }
   };
 
+  /**
+   * ============================================================
+   * REMOVE STUDENT
+   * ============================================================
+   */
   const removeStudent = async (studentId: string) => {
     if (!selectedSubject) return;
 
@@ -303,7 +389,13 @@ export default function AdminSubjectsPage() {
     } catch (error: any) {
       console.error("Failed to remove student:", error);
 
-      alert("Failed to remove student.");
+      const message = error?.response?.data?.message;
+
+      alert(
+        Array.isArray(message)
+          ? message.join(", ")
+          : message || "Failed to remove student.",
+      );
     }
   };
 
@@ -326,7 +418,9 @@ export default function AdminSubjectsPage() {
         </p>
       </div>
 
-      {/* CREATE SUBJECT */}
+      {/* ======================================================
+          CREATE SUBJECT
+          ====================================================== */}
       <div className="mb-8 rounded-2xl bg-white p-6 shadow">
         <h2 className="mb-5 text-xl font-bold text-gray-800">Create Subject</h2>
 
@@ -364,7 +458,9 @@ export default function AdminSubjectsPage() {
               className="w-full rounded-lg border border-gray-300 bg-white p-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100"
             >
               <option value="">Select programme</option>
+
               <option value="JAMB">JAMB</option>
+
               <option value="WAEC">WAEC</option>
             </select>
           </div>
@@ -398,7 +494,9 @@ export default function AdminSubjectsPage() {
         </button>
       </div>
 
-      {/* SUBJECT LIST */}
+      {/* ======================================================
+          SUBJECT LIST
+          ====================================================== */}
       <div className="mb-8 rounded-2xl bg-white p-6 shadow">
         <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div>
@@ -411,13 +509,17 @@ export default function AdminSubjectsPage() {
             </p>
           </div>
 
-          <div className="flex gap-2 text-xs font-semibold">
+          <div className="flex flex-wrap gap-2 text-xs font-semibold">
             <span className="rounded-full bg-blue-100 px-3 py-1 text-blue-700">
               JAMB
             </span>
 
             <span className="rounded-full bg-green-100 px-3 py-1 text-green-700">
               WAEC
+            </span>
+
+            <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-700">
+              Inactive = hidden from registration
             </span>
           </div>
         </div>
@@ -435,6 +537,8 @@ export default function AdminSubjectsPage() {
 
                   <th className="px-3 py-3">Programme</th>
 
+                  <th className="px-3 py-3">Status</th>
+
                   <th className="px-3 py-3">Teacher</th>
 
                   <th className="px-3 py-3">Students</th>
@@ -447,7 +551,12 @@ export default function AdminSubjectsPage() {
 
               <tbody>
                 {subjects.map((subject) => (
-                  <tr key={subject.id} className="border-b">
+                  <tr
+                    key={subject.id}
+                    className={`border-b ${
+                      !subject.isActive ? "bg-gray-50" : ""
+                    }`}
+                  >
                     <td className="px-3 py-4">
                       <div className="font-semibold text-gray-800">
                         {subject.name}
@@ -466,6 +575,18 @@ export default function AdminSubjectsPage() {
                       ) : (
                         <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
                           WAEC
+                        </span>
+                      )}
+                    </td>
+
+                    <td className="px-3 py-4">
+                      {subject.isActive ? (
+                        <span className="inline-flex rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700">
+                          Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex rounded-full bg-gray-200 px-3 py-1 text-xs font-bold text-gray-700">
+                          Inactive
                         </span>
                       )}
                     </td>
@@ -498,10 +619,15 @@ export default function AdminSubjectsPage() {
 
                         <button
                           type="button"
-                          onClick={() => deleteSubject(subject.id)}
-                          className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700"
+                          onClick={() => deleteSubject(subject)}
+                          disabled={deletingSubject === subject.id}
+                          className="rounded-lg bg-red-600 px-3 py-2 text-sm font-semibold text-white hover:bg-red-700 disabled:cursor-not-allowed disabled:opacity-50"
                         >
-                          Delete
+                          {deletingSubject === subject.id
+                            ? "Processing..."
+                            : subject.isActive
+                              ? "Delete / Deactivate"
+                              : "Delete"}
                         </button>
                       </div>
                     </td>
@@ -513,7 +639,9 @@ export default function AdminSubjectsPage() {
         )}
       </div>
 
-      {/* MANAGEMENT PANEL */}
+      {/* ======================================================
+          MANAGEMENT PANEL
+          ====================================================== */}
       {selectedSubject && (
         <div className="rounded-2xl bg-white p-6 shadow">
           <div className="mb-6 flex items-start justify-between">
@@ -531,6 +659,16 @@ export default function AdminSubjectsPage() {
                   }
                 >
                   {selectedSubject.programme}
+                </span>
+
+                <span
+                  className={
+                    selectedSubject.isActive
+                      ? "rounded-full bg-green-100 px-3 py-1 text-xs font-bold text-green-700"
+                      : "rounded-full bg-gray-200 px-3 py-1 text-xs font-bold text-gray-700"
+                  }
+                >
+                  {selectedSubject.isActive ? "Active" : "Inactive"}
                 </span>
               </div>
 
@@ -551,7 +689,16 @@ export default function AdminSubjectsPage() {
             </button>
           </div>
 
-          {/* TEACHER ASSIGNMENT */}
+          {!selectedSubject.isActive && (
+            <div className="mb-6 rounded-xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+              <strong>This subject is inactive.</strong> It is hidden from
+              student registration and cannot receive new student enrollments.
+            </div>
+          )}
+
+          {/* ==================================================
+              TEACHER ASSIGNMENT
+              ================================================== */}
           <div className="mb-8 rounded-xl border border-gray-200 p-5">
             <h3 className="mb-4 text-lg font-bold text-gray-800">
               Assign Teacher
@@ -562,6 +709,7 @@ export default function AdminSubjectsPage() {
                 value={selectedTeacher}
                 onChange={(e) => setSelectedTeacher(e.target.value)}
                 className="flex-1 rounded-lg border border-gray-300 p-3"
+                disabled={!selectedSubject.isActive}
               >
                 <option value="">Select teacher</option>
 
@@ -575,7 +723,7 @@ export default function AdminSubjectsPage() {
               <button
                 type="button"
                 onClick={assignTeacher}
-                disabled={savingTeacher}
+                disabled={savingTeacher || !selectedSubject.isActive}
                 className="rounded-lg bg-purple-600 px-5 py-3 font-semibold text-white hover:bg-purple-700 disabled:opacity-50"
               >
                 {savingTeacher ? "Assigning..." : "Assign Teacher"}
@@ -592,7 +740,9 @@ export default function AdminSubjectsPage() {
             </p>
           </div>
 
-          {/* STUDENT ENROLLMENT */}
+          {/* ==================================================
+              STUDENT ENROLLMENT
+              ================================================== */}
           <div className="mb-8 rounded-xl border border-gray-200 p-5">
             <h3 className="mb-4 text-lg font-bold text-gray-800">
               Enroll Student
@@ -602,6 +752,7 @@ export default function AdminSubjectsPage() {
               <select
                 value={selectedStudent}
                 onChange={(e) => setSelectedStudent(e.target.value)}
+                disabled={!selectedSubject.isActive}
                 className="flex-1 rounded-lg border border-gray-300 p-3"
               >
                 <option value="">Select student</option>
@@ -616,7 +767,11 @@ export default function AdminSubjectsPage() {
               <button
                 type="button"
                 onClick={enrollStudent}
-                disabled={enrollingStudent || availableStudents.length === 0}
+                disabled={
+                  enrollingStudent ||
+                  availableStudents.length === 0 ||
+                  !selectedSubject.isActive
+                }
                 className="rounded-lg bg-green-600 px-5 py-3 font-semibold text-white hover:bg-green-700 disabled:opacity-50"
               >
                 {enrollingStudent ? "Enrolling..." : "Enroll Student"}
@@ -630,7 +785,9 @@ export default function AdminSubjectsPage() {
             )}
           </div>
 
-          {/* ENROLLED STUDENTS */}
+          {/* ==================================================
+              ENROLLED STUDENTS
+              ================================================== */}
           <div>
             <div className="mb-4 flex items-center justify-between">
               <h3 className="text-lg font-bold text-gray-800">

@@ -4,4 +4,5 @@ export interface User {
   lastName: string;
   email: string;
   role: "ADMIN" | "TEACHER" | "STUDENT";
+  profileImage?: string | null;
 }

@@ -1,4 +1,12 @@
-import { Body, Controller, Get, Param, Patch, UseGuards } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Patch,
+  UseGuards,
+} from '@nestjs/common';
 
 import { UsersService } from './users.service';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -14,7 +22,7 @@ export class UsersController {
 
   /**
    * ADMIN ONLY
-   * Get all users
+   * Get all users.
    */
   @Get()
   @Roles('ADMIN')
@@ -24,7 +32,7 @@ export class UsersController {
 
   /**
    * ADMIN ONLY
-   * Get all teachers
+   * Get all teachers.
    */
   @Get('teachers')
   @Roles('ADMIN')
@@ -34,7 +42,8 @@ export class UsersController {
 
   /**
    * ADMIN ONLY
-   * Get all students
+   * Get all students with programme, cohort,
+   * enrollment, subscription, payment and request information.
    */
   @Get('students')
   @Roles('ADMIN')
@@ -44,17 +53,29 @@ export class UsersController {
 
   /**
    * ADMIN ONLY
-   * Change user role
+   * Change user role.
+   *
+   * An administrator cannot change their own role.
    */
   @Patch(':id/role/:role')
   @Roles('ADMIN')
-  updateRole(@Param('id') id: string, @Param('role') role: string) {
+  updateRole(
+    @Param('id') id: string,
+    @Param('role') role: string,
+    @CurrentUser() currentUser: AuthenticatedUser,
+  ) {
+    if (currentUser.id === id) {
+      throw new ForbiddenException(
+        'You cannot change your own administrator role.',
+      );
+    }
+
     return this.usersService.updateRole(id, role);
   }
 
   /**
    * ADMIN ONLY
-   * Activate user
+   * Activate user.
    */
   @Patch(':id/activate')
   @Roles('ADMIN')
@@ -64,7 +85,9 @@ export class UsersController {
 
   /**
    * ADMIN ONLY
-   * Deactivate user
+   * Deactivate user.
+   *
+   * Administrator accounts are protected inside the service.
    */
   @Patch(':id/deactivate')
   @Roles('ADMIN')
@@ -74,7 +97,7 @@ export class UsersController {
 
   /**
    * AUTHENTICATED USER
-   * Get own profile
+   * Get own profile.
    */
   @Get('me')
   findMe(@CurrentUser() user: AuthenticatedUser) {
@@ -83,7 +106,7 @@ export class UsersController {
 
   /**
    * AUTHENTICATED USER
-   * Update own profile
+   * Update own profile.
    */
   @Patch('me')
   updateMyProfile(
@@ -101,9 +124,10 @@ export class UsersController {
   ) {
     return this.usersService.updateProfile(user.id, body);
   }
+
   /**
    * ADMIN ONLY
-   * Platform statistics
+   * Platform statistics.
    */
   @Get('stats')
   @Roles('ADMIN')

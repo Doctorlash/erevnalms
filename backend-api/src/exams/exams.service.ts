@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-return */
 import { Injectable, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -11,9 +8,17 @@ import { CreateExamDto } from './dto/create-exam.dto';
 export class ExamsService {
   constructor(private prisma: PrismaService) {}
 
-  create(dto: CreateExamDto) {
+  async create(dto: CreateExamDto) {
     return this.prisma.exam.create({
-      data: dto,
+      data: {
+        title: dto.title,
+        subjectId: dto.subjectId,
+        cohortId: dto.cohortId,
+        duration: dto.duration,
+        totalMarks: dto.totalMarks,
+        isPublished: dto.isPublished,
+        isFinalExam: dto.isFinalExam ?? false,
+      },
     });
   }
 
@@ -21,7 +26,13 @@ export class ExamsService {
     return this.prisma.exam.findMany({
       select: {
         id: true,
+        title: true,
+        duration: true,
+        totalMarks: true,
+        isPublished: true,
+        isFinalExam: true,
         subject: true,
+        cohort: true,
         examQuestions: {
           select: {
             question: true,
@@ -36,7 +47,13 @@ export class ExamsService {
       where: { id },
       select: {
         id: true,
+        title: true,
+        duration: true,
+        totalMarks: true,
+        isPublished: true,
+        isFinalExam: true,
         subject: true,
+        cohort: true,
         examQuestions: {
           select: {
             question: true,

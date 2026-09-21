@@ -1,79 +1,59 @@
-import { Body, Controller, Get, Param, Post } from '@nestjs/common';
+import { Controller, Get, Param, Req, UseGuards } from '@nestjs/common';
+import { Request } from 'express';
+
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 import { SubscriptionsService } from './subscriptions.service';
 
-import { CreateSubscriptionDto } from './dto/create-subscription.dto';
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: string;
+    role?: string;
+  };
+}
 
 @Controller('subscriptions')
+@UseGuards(JwtAuthGuard)
 export class SubscriptionsController {
   constructor(private readonly service: SubscriptionsService) {}
 
   // =========================================================
-  // CREATE SUBSCRIPTION
-  // =========================================================
-
-  @Post()
-  create(
-    @Body()
-    dto: CreateSubscriptionDto,
-  ) {
-    return this.service.create(dto);
-  }
-
-  // =========================================================
   // GET ALL SUBSCRIPTIONS
+  // ADMIN ONLY
   // =========================================================
 
   @Get()
-  findAll() {
-    return this.service.findAll();
+  findAll(@Req() req: AuthenticatedRequest) {
+    return this.service.findAll(req.user);
   }
 
   // =========================================================
-  // GET USER SUBSCRIPTIONS
+  // GET MY SUBSCRIPTIONS
   // =========================================================
 
-  @Get('user/:userId')
-  findByUser(
-    @Param('userId')
-    userId: string,
-  ) {
-    return this.service.findByUser(userId);
+  @Get('my')
+  findMySubscriptions(@Req() req: AuthenticatedRequest) {
+    return this.service.findMySubscriptions(req.user);
   }
 
   // =========================================================
-  // INITIALIZE PAYMENT
+  // GET MY SUBSCRIPTION FOR A COHORT
   // =========================================================
 
-  @Post(':id/pay')
-  initializePayment(
-    @Param('id')
-    id: string,
+  @Get('my/cohort/:cohortId')
+  findMyCohortSubscription(
+    @Param('cohortId') cohortId: string,
+    @Req() req: AuthenticatedRequest,
   ) {
-    return this.service.initializePayment(id);
+    return this.service.findMyCohortSubscription(cohortId, req.user);
   }
 
   // =========================================================
-  // VERIFY PAYMENT
+  // GET ONE SUBSCRIPTION
   // =========================================================
 
-  @Post('verify/:reference')
-  verifyPayment(
-    @Param('reference')
-    reference: string,
-  ) {
-    return this.service.verifyPayment(reference);
-  }
-
-  // =========================================================
-  // EXISTING ACTIVATION
-  // =========================================================
-
-  @Post(':id/activate')
-  activate(
-    @Param('id')
-    id: string,
-  ) {
-    return this.service.activate(id);
+  @Get(':id')
+  findOne(@Param('id') id: string, @Req() req: AuthenticatedRequest) {
+    return this.service.findOne(id, req.user);
   }
 }

@@ -1,6 +1,3 @@
-/* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,11 +7,52 @@ export class StudentDashboardService {
   constructor(private prisma: PrismaService) {}
 
   async getDashboard(studentId: string) {
+    const now = new Date();
+
+    // =========================================================
+    // ACTIVE ENROLLMENTS
+    // =========================================================
+
     const enrollments = await this.prisma.enrollment.count({
       where: {
         userId: studentId,
+        subject: {
+          isActive: true,
+        },
+        OR: [
+          {
+            type: 'FREE',
+            expiresAt: {
+              gt: now,
+            },
+          },
+          {
+            type: 'PAID',
+            expiresAt: {
+              gt: now,
+            },
+            studentCohort: {
+              status: 'ACTIVE',
+              cohort: {
+                status: {
+                  not: 'CANCELLED',
+                },
+                startDate: {
+                  lte: now,
+                },
+                endDate: {
+                  gt: now,
+                },
+              },
+            },
+          },
+        ],
       },
     });
+
+    // =========================================================
+    // COMPLETED LESSONS
+    // =========================================================
 
     const completedLessons = await this.prisma.lessonProgress.count({
       where: {
@@ -22,6 +60,10 @@ export class StudentDashboardService {
         completed: true,
       },
     });
+
+    // =========================================================
+    // RECENT ASSIGNMENT SUBMISSIONS
+    // =========================================================
 
     const assignments = await this.prisma.assignmentSubmission.findMany({
       where: {
@@ -36,6 +78,10 @@ export class StudentDashboardService {
       take: 5,
     });
 
+    // =========================================================
+    // RECENT NOTIFICATIONS
+    // =========================================================
+
     const notifications = await this.prisma.notification.findMany({
       where: {
         userId: studentId,
@@ -45,6 +91,10 @@ export class StudentDashboardService {
       },
       take: 5,
     });
+
+    // =========================================================
+    // RECENT EXAM ATTEMPTS
+    // =========================================================
 
     const examAttempts = await this.prisma.examAttempt.findMany({
       where: {
@@ -56,6 +106,10 @@ export class StudentDashboardService {
       take: 5,
     });
 
+    // =========================================================
+    // MOST RECENT SUBSCRIPTION
+    // =========================================================
+
     const subscription = await this.prisma.subscription.findFirst({
       where: {
         userId: studentId,
@@ -63,12 +117,24 @@ export class StudentDashboardService {
       orderBy: {
         createdAt: 'desc',
       },
+      include: {
+        cohort: true,
+        studentCohort: {
+          include: {
+            cohort: true,
+          },
+        },
+      },
     });
+
+    // =========================================================
+    // UPCOMING LIVE CLASSES
+    // =========================================================
 
     const upcomingClasses = await this.prisma.liveClass.findMany({
       where: {
         startTime: {
-          gte: new Date(),
+          gte: now,
         },
       },
       orderBy: {
@@ -76,6 +142,10 @@ export class StudentDashboardService {
       },
       take: 5,
     });
+
+    // =========================================================
+    // DASHBOARD RESPONSE
+    // =========================================================
 
     return {
       stats: {

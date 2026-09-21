@@ -19,6 +19,8 @@ interface AuthContextType {
 
   adminLogin: (email: string, password: string) => Promise<User>;
 
+  updateUser: (updates: Partial<User>) => void;
+
   logout: () => void;
 }
 
@@ -26,18 +28,22 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-
   const [token, setToken] = useState<string | null>(null);
 
   useEffect(() => {
     const savedToken = localStorage.getItem("token");
-
     const savedUser = localStorage.getItem("user");
 
     if (savedToken && savedUser) {
-      setToken(savedToken);
+      try {
+        const parsedUser: User = JSON.parse(savedUser);
 
-      setUser(JSON.parse(savedUser));
+        setToken(savedToken);
+        setUser(parsedUser);
+      } catch {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
     }
   }, []);
 
@@ -54,11 +60,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     const { access_token, user } = response.data;
 
     localStorage.setItem("token", access_token);
-
     localStorage.setItem("user", JSON.stringify(user));
 
     setToken(access_token);
-
     setUser(user);
 
     return user;
@@ -72,6 +76,23 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   const adminLogin = (email: string, password: string) =>
     authenticate("/auth/admin-login", email, password);
+
+  const updateUser = (updates: Partial<User>) => {
+    setUser((currentUser) => {
+      if (!currentUser) {
+        return currentUser;
+      }
+
+      const updatedUser: User = {
+        ...currentUser,
+        ...updates,
+      };
+
+      localStorage.setItem("user", JSON.stringify(updatedUser));
+
+      return updatedUser;
+    });
+  };
 
   const logout = () => {
     const currentUser = user;
@@ -102,10 +123,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         token,
 
         studentLogin,
-
         teacherLogin,
-
         adminLogin,
+
+        updateUser,
 
         logout,
       }}

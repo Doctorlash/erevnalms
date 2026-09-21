@@ -1,213 +1,343 @@
-/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 /* eslint-disable @typescript-eslint/no-unsafe-member-access */
-/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import {
+  BadRequestException,
   Injectable,
   NotFoundException,
-  BadRequestException,
 } from '@nestjs/common';
 
-import { PrismaService } from '../prisma/prisma.service';
-
 import PDFDocument from 'pdfkit';
+
+import { PrismaService } from '../prisma/prisma.service';
 
 @Injectable()
 export class CertificatesService {
   constructor(private prisma: PrismaService) {}
 
   /**
-   * Generate a certificate manually.
-   * Kept because your existing system already uses this endpoint.
-   */
-  async generate(data: {
-    userId: string;
-    subjectId?: string;
-    examId?: string;
-  }) {
-    const user = await this.prisma.user.findUnique({
-      where: {
-        id: data.userId,
-      },
-    });
-
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    /*
-     * Prevent duplicate certificates for the same student/exam.
-     */
-    if (data.examId) {
-      const existing = await this.prisma.certificate.findFirst({
-        where: {
-          userId: data.userId,
-          examId: data.examId,
-        },
-        include: {
-          user: true,
-          subject: true,
-          exam: true,
-        },
-      });
-
-      if (existing) {
-        return existing;
-      }
-    }
-
-    const certificateNumber =
-      'ERV-' +
-      Date.now().toString().slice(-8) +
-      '-' +
-      Math.floor(100 + Math.random() * 900);
-
-    return this.prisma.certificate.create({
-      data: {
-        userId: data.userId,
-        subjectId: data.subjectId,
-        examId: data.examId,
-        certificateNumber,
-      },
-
-      include: {
-        user: true,
-        subject: true,
-        exam: true,
-      },
-    });
-  }
-
-  /**
-   * Automatically generate a certificate after a student
-   * successfully completes an exam.
+   * Generate a certificate for a completed student cohort.
    *
-   * Current Erevna pass mark: 50%.
+   * Certificate eligibility is checked server-side.
    */
-  async generateForPassedExam(attemptId: string) {
-    const attempt = await this.prisma.examAttempt.findUnique({
+  async generateForStudentCohort(studentCohortId: string) {
+    const studentCohort = await this.prisma.studentCohort.findUnique({
       where: {
-        id: attemptId,
+        id: studentCohortId,
       },
-
       include: {
         user: true,
-
-        exam: {
-          include: {
-            subject: true,
-          },
-        },
+        cohort: true,
       },
     });
 
-    if (!attempt) {
-      throw new NotFoundException('Exam attempt not found');
+    if (!studentCohort) {
+      throw new NotFoundException('Student cohort not found');
     }
 
-    if (!attempt.completed) {
+    const existingCertificate = await this.prisma.certificate.findUnique({
+      where: {
+        studentCohortId,
+      },
+    });
+
+    if (existingCertificate) {
+      return existingCertificate;
+    }
+
+    if (
+      studentCohort.status === 'WITHDRAWN' ||
+      studentCohort.status === 'SUSPENDED'
+    ) {
       throw new BadRequestException(
-        'Certificate cannot be generated before the exam is completed.',
+        'Student is not eligible for a certificate from this cohort',
+      );
+    }
+
+    const now = new Date();
+
+    if (now < studentCohort.cohort.endDate) {
+      throw new BadRequestException(
+        'The cohort has not reached its completion date',
+      );
+    }
+
+    if (studentCohort.status !== 'COMPLETED') {
+      throw new BadRequestException(
+        'Student cohort must be marked as completed before a certificate can be issued',
+      );
+    }
+
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: {
+        userId: studentCohort.userId,
+        programme: studentCohort.cohort.programme,
+        OR: [
+          {
+            cohortId: studentCohort.cohortId,
+          },
+          {
+            studentCohortId: studentCohort.id,
+          },
+        ],
+      },
+      select: {
+        subjectId: true,
+      },
+    });
+
+    const subjectIds = [
+      ...new Set(enrollments.map((enrollment) => enrollment.subjectId)),
+    ];
+
+    if (subjectIds.length === 0) {
+      throw new BadRequestException(
+        'Student has no enrolled subjects for this cohort',
       );
     }
 
     /*
-     * Erevna pass mark.
+     * ---------------------------------------------------------
+     * LESSON COMPLETION
+     * ---------------------------------------------------------
      */
-    if (attempt.score < 50) {
-      return {
-        eligible: false,
-        message: 'Student did not meet the certificate pass mark.',
-        certificate: null,
-      };
+
+    const requiredLessons = await this.prisma.lesson.findMany({
+      where: {
+        subjectId: {
+          in: subjectIds,
+        },
+        isPublished: true,
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    if (requiredLessons.length > 0) {
+      const lessonProgress = await this.prisma.lessonProgress.findMany({
+        where: {
+          userId: studentCohort.userId,
+          lessonId: {
+            in: requiredLessons.map((lesson) => lesson.id),
+          },
+          completed: true,
+        },
+        select: {
+          lessonId: true,
+        },
+      });
+
+      const completedLessonIds = new Set(
+        lessonProgress.map((progress) => progress.lessonId),
+      );
+
+      const incompleteLessons = requiredLessons.filter(
+        (lesson) => !completedLessonIds.has(lesson.id),
+      );
+
+      if (incompleteLessons.length > 0) {
+        throw new BadRequestException(
+          `Student has ${incompleteLessons.length} incomplete published lesson(s)`,
+        );
+      }
     }
 
     /*
-     * Prevent duplicate certificates.
+     * ---------------------------------------------------------
+     * ASSIGNMENT COMPLETION
+     * ---------------------------------------------------------
+     *
+     * Required assignments are:
+     * - published
+     * - attached to one of the student's enrolled subjects
+     * - either specifically attached to this cohort OR legacy/global
+     *
+     * A submission must exist and be graded.
      */
-    const existing = await this.prisma.certificate.findFirst({
-      where: {
-        userId: attempt.userId,
-        examId: attempt.examId,
-      },
 
-      include: {
-        user: true,
-        subject: true,
-        exam: true,
+    const requiredAssignments = await this.prisma.assignment.findMany({
+      where: {
+        subjectId: {
+          in: subjectIds,
+        },
+        isPublished: true,
+        OR: [
+          {
+            cohortId: studentCohort.cohortId,
+          },
+          {
+            cohortId: null,
+          },
+        ],
+      },
+      select: {
+        id: true,
       },
     });
 
-    if (existing) {
-      return {
-        eligible: true,
-        alreadyGenerated: true,
-        message: 'Certificate already exists.',
-        certificate: existing,
-      };
+    if (requiredAssignments.length > 0) {
+      const submissions = await this.prisma.assignmentSubmission.findMany({
+        where: {
+          studentId: studentCohort.userId,
+          assignmentId: {
+            in: requiredAssignments.map((assignment) => assignment.id),
+          },
+          gradedAt: {
+            not: null,
+          },
+        },
+        select: {
+          assignmentId: true,
+        },
+      });
+
+      const gradedAssignmentIds = new Set(
+        submissions.map((submission) => submission.assignmentId),
+      );
+
+      const incompleteAssignments = requiredAssignments.filter(
+        (assignment) => !gradedAssignmentIds.has(assignment.id),
+      );
+
+      if (incompleteAssignments.length > 0) {
+        throw new BadRequestException(
+          `Student has ${incompleteAssignments.length} incomplete assignment(s)`,
+        );
+      }
     }
 
-    const certificateNumber =
-      'ERV-' +
-      Date.now().toString().slice(-8) +
-      '-' +
-      Math.floor(100 + Math.random() * 900);
+    /*
+     * ---------------------------------------------------------
+     * FINAL EXAM COMPLETION
+     * ---------------------------------------------------------
+     *
+     * Only published exams explicitly marked as final exams
+     * for this cohort are required.
+     */
 
-    const certificate = await this.prisma.certificate.create({
-      data: {
-        userId: attempt.userId,
-        subjectId: attempt.exam.subjectId,
-        examId: attempt.examId,
-        certificateNumber,
+    const finalExams = await this.prisma.exam.findMany({
+      where: {
+        cohortId: studentCohort.cohortId,
+        isPublished: true,
+        isFinalExam: true,
+        subjectId: {
+          in: subjectIds,
+        },
       },
-
-      include: {
-        user: true,
-        subject: true,
-        exam: true,
+      select: {
+        id: true,
+        title: true,
+        subjectId: true,
       },
     });
 
-    return {
-      eligible: true,
-      alreadyGenerated: false,
-      message: 'Certificate generated successfully.',
-      certificate,
-    };
+    if (finalExams.length === 0) {
+      throw new BadRequestException(
+        'No published final examination has been configured for this cohort',
+      );
+    }
+
+    const finalExamIds = finalExams.map((exam) => exam.id);
+
+    const passedAttempts = await this.prisma.examAttempt.findMany({
+      where: {
+        userId: studentCohort.userId,
+        examId: {
+          in: finalExamIds,
+        },
+        completed: true,
+        score: {
+          gte: 50,
+        },
+      },
+      select: {
+        examId: true,
+      },
+    });
+
+    const passedExamIds = new Set(
+      passedAttempts.map((attempt) => attempt.examId),
+    );
+
+    const incompleteFinalExams = finalExams.filter(
+      (exam) => !passedExamIds.has(exam.id),
+    );
+
+    if (incompleteFinalExams.length > 0) {
+      throw new BadRequestException(
+        `Student has ${incompleteFinalExams.length} final examination(s) that have not been passed`,
+      );
+    }
+
+    /*
+     * ---------------------------------------------------------
+     * CERTIFICATE CREATION
+     * ---------------------------------------------------------
+     */
+
+    const certificateNumber = await this.createUniqueCertificateNumber();
+
+    const verificationCode = await this.createUniqueVerificationCode();
+
+    const completionDate =
+      studentCohort.completedAt ?? studentCohort.cohort.endDate;
+
+    return this.prisma.certificate.create({
+      data: {
+        userId: studentCohort.userId,
+        studentCohortId: studentCohort.id,
+        cohortId: studentCohort.cohortId,
+        programme: studentCohort.cohort.programme,
+
+        certificateNumber,
+        verificationCode,
+
+        completionDate,
+        issuedAt: now,
+
+        status: 'ISSUED',
+      },
+      include: {
+        user: true,
+        cohort: true,
+        studentCohort: true,
+      },
+    });
   }
 
   /**
-   * Get all certificates belonging to a student.
+   * Backward-compatible entry point.
+   *
+   * New certificates must be generated from a StudentCohort.
    */
+  async generate(data: { studentCohortId: string }) {
+    return this.generateForStudentCohort(data.studentCohortId);
+  }
+
   async studentCertificates(userId: string) {
     return this.prisma.certificate.findMany({
       where: {
         userId,
       },
-
       include: {
-        subject: true,
-        exam: true,
+        cohort: true,
+        studentCohort: true,
       },
-
       orderBy: {
         issuedAt: 'desc',
       },
     });
   }
 
-  /**
-   * Find one certificate.
-   */
   async findOne(id: string) {
     const certificate = await this.prisma.certificate.findUnique({
       where: {
         id,
       },
-
       include: {
         user: true,
-        subject: true,
-        exam: true,
+        cohort: true,
+        studentCohort: true,
       },
     });
 
@@ -218,223 +348,277 @@ export class CertificatesService {
     return certificate;
   }
 
-  /**
-   * Public certificate verification.
-   */
   async verify(certificateNumber: string) {
     const certificate = await this.prisma.certificate.findUnique({
       where: {
         certificateNumber,
       },
-
       include: {
         user: true,
-        subject: true,
-        exam: true,
+        cohort: true,
+        studentCohort: true,
       },
     });
 
     if (!certificate) {
-      return {
-        valid: false,
-        message: 'Certificate not found.',
-      };
+      throw new NotFoundException('Certificate not found');
     }
 
     return {
-      valid: true,
+      certificateNumber: certificate.certificateNumber,
+      verificationCode: certificate.verificationCode,
 
-      certificate: {
-        certificateNumber: certificate.certificateNumber,
+      studentName: `${certificate.user.firstName} ${certificate.user.lastName}`,
 
-        studentName: `${certificate.user.firstName} ${certificate.user.lastName}`,
+      programme: certificate.programme,
 
-        subject: certificate.subject?.name || 'General',
-
-        exam: certificate.exam?.title || 'N/A',
-
-        issuedAt: certificate.issuedAt,
-
-        platform: 'Erevna Leadership Academy',
+      cohort: {
+        id: certificate.cohort.id,
+        name: certificate.cohort.name,
+        startDate: certificate.cohort.startDate,
+        endDate: certificate.cohort.endDate,
       },
+
+      completionDate: certificate.completionDate,
+      issuedAt: certificate.issuedAt,
+
+      status: certificate.status,
+      valid: certificate.status === 'ISSUED',
+
+      revokedAt: certificate.revokedAt,
+      revocationReason: certificate.revocationReason,
+
+      platform: 'Erevna LMS',
     };
   }
 
-  /**
-   * Generate certificate PDF.
-   */
   async generatePdf(id: string): Promise<Buffer> {
-    const certificate = await this.findOne(id);
+    const certificate = await this.prisma.certificate.findUnique({
+      where: {
+        id,
+      },
+      include: {
+        user: true,
+        cohort: true,
+      },
+    });
 
-    return new Promise((resolve, reject) => {
-      const doc = new PDFDocument({
+    if (!certificate) {
+      throw new NotFoundException('Certificate not found');
+    }
+
+    return new Promise<Buffer>((resolve, reject) => {
+      const document = new PDFDocument({
         size: 'A4',
         layout: 'landscape',
-        margin: 40,
+        margins: {
+          top: 0,
+          bottom: 0,
+          left: 0,
+          right: 0,
+        },
       });
 
       const chunks: Buffer[] = [];
 
-      doc.on('data', (chunk: Buffer) => {
+      document.on('data', (chunk: Buffer) => {
         chunks.push(chunk);
       });
 
-      doc.on('end', () => {
+      document.on('end', () => {
         resolve(Buffer.concat(chunks));
       });
 
-      doc.on('error', reject);
+      document.on('error', reject);
 
-      const width = doc.page.width;
-      const height = doc.page.height;
+      const width = document.page.width;
+      const height = document.page.height;
 
       /*
-       * Outer border
+       * ---------------------------------------------------------
+       * CERTIFICATE TEMPLATE
+       * ---------------------------------------------------------
        */
-      doc
-        .lineWidth(5)
+
+      document
+        .lineWidth(8)
         .rect(25, 25, width - 50, height - 50)
-        .stroke('#312e81');
+        .stroke();
 
-      /*
-       * Inner border
-       */
-      doc
-        .lineWidth(1)
+      document
+        .lineWidth(2)
         .rect(38, 38, width - 76, height - 76)
-        .stroke('#c7d2fe');
+        .stroke();
 
-      /*
-       * Academy heading
-       */
-      doc
-        .fontSize(30)
-        .fillColor('#312e81')
+      document.fontSize(18).font('Helvetica').text('EREVNA LMS', 0, 75, {
+        align: 'center',
+        width,
+      });
+
+      document
+        .fontSize(34)
         .font('Helvetica-Bold')
-        .text('EREVNA LEADERSHIP ACADEMY', 60, 70, {
+        .text('CERTIFICATE OF COMPLETION', 0, 115, {
           align: 'center',
-          width: width - 120,
+          width,
         });
 
-      doc
-        .fontSize(14)
-        .fillColor('#64748b')
+      document
+        .fontSize(16)
         .font('Helvetica')
-        .text('Learning Management System', {
+        .text('This certificate is proudly presented to', 0, 180, {
           align: 'center',
+          width,
         });
 
-      /*
-       * Certificate title
-       */
-      doc
-        .moveDown(2)
-        .fontSize(32)
-        .fillColor('#111827')
+      document
+        .fontSize(38)
         .font('Helvetica-Bold')
-        .text('CERTIFICATE OF ACHIEVEMENT', {
-          align: 'center',
-        });
-
-      doc
-        .moveDown(0.8)
-        .fontSize(15)
-        .fillColor('#475569')
-        .font('Helvetica')
-        .text('This certificate is proudly presented to', {
-          align: 'center',
-        });
-
-      /*
-       * Student name
-       */
-      doc
-        .moveDown(0.5)
-        .fontSize(30)
-        .fillColor('#312e81')
-        .font('Helvetica-Bold')
-        .text(`${certificate.user.firstName} ${certificate.user.lastName}`, {
-          align: 'center',
-        });
-
-      /*
-       * Achievement statement
-       */
-      doc
-        .moveDown(0.8)
-        .fontSize(15)
-        .fillColor('#475569')
-        .font('Helvetica')
-        .text('for successfully completing the required academic assessment', {
-          align: 'center',
-        });
-
-      /*
-       * Subject
-       */
-      doc
-        .moveDown(0.5)
-        .fontSize(22)
-        .fillColor('#111827')
-        .font('Helvetica-Bold')
-        .text(certificate.subject?.name || 'Academic Programme', {
-          align: 'center',
-        });
-
-      /*
-       * Exam
-       */
-      if (certificate.exam?.title) {
-        doc
-          .moveDown(0.4)
-          .fontSize(14)
-          .fillColor('#64748b')
-          .font('Helvetica')
-          .text(`Assessment: ${certificate.exam.title}`, {
-            align: 'center',
-          });
-      }
-
-      /*
-       * Certificate number and date
-       */
-      const bottomY = height - 135;
-
-      doc
-        .fontSize(12)
-        .fillColor('#475569')
-        .font('Helvetica')
-        .text(`Certificate No: ${certificate.certificateNumber}`, 70, bottomY, {
-          width: 300,
-        });
-
-      doc.text(
-        `Issued: ${new Date(certificate.issuedAt).toLocaleDateString('en-NG')}`,
-        width - 370,
-        bottomY,
-        {
-          width: 300,
-          align: 'right',
-        },
-      );
-
-      /*
-       * Verification instruction
-       */
-      doc
-        .fontSize(10)
-        .fillColor('#64748b')
         .text(
-          'This certificate can be verified using the certificate number on the Erevna platform.',
+          `${certificate.user.firstName} ${certificate.user.lastName}`,
           70,
-          height - 80,
+          220,
           {
-            width: width - 140,
             align: 'center',
+            width: width - 140,
           },
         );
 
-      doc.end();
+      document
+        .lineWidth(1)
+        .moveTo(190, 270)
+        .lineTo(width - 190, 270)
+        .stroke();
+
+      document
+        .fontSize(16)
+        .font('Helvetica')
+        .text(
+          `for successfully completing the ${certificate.cohort.name}`,
+          0,
+          300,
+          {
+            align: 'center',
+            width,
+          },
+        );
+
+      document
+        .fontSize(19)
+        .font('Helvetica-Bold')
+        .text(`${certificate.programme} PROGRAMME`, 0, 330, {
+          align: 'center',
+          width,
+        });
+
+      document
+        .fontSize(13)
+        .font('Helvetica')
+        .text(
+          `Cohort period: ${this.formatDate(
+            certificate.cohort.startDate,
+          )} – ${this.formatDate(certificate.cohort.endDate)}`,
+          0,
+          370,
+          {
+            align: 'center',
+            width,
+          },
+        );
+
+      document
+        .fontSize(12)
+        .text(
+          `Completion date: ${this.formatDate(certificate.completionDate)}`,
+          80,
+          height - 125,
+        );
+
+      document
+        .fontSize(12)
+        .text(
+          `Certificate No.: ${certificate.certificateNumber}`,
+          0,
+          height - 125,
+          {
+            align: 'center',
+            width,
+          },
+        );
+
+      document
+        .fontSize(11)
+        .text(
+          'Verify this certificate through the Erevna LMS certificate verification system.',
+          0,
+          height - 90,
+          {
+            align: 'center',
+            width,
+          },
+        );
+
+      document.end();
     });
+  }
+
+  private formatDate(date: Date) {
+    return new Intl.DateTimeFormat('en-GB', {
+      day: '2-digit',
+      month: 'long',
+      year: 'numeric',
+    }).format(date);
+  }
+
+  private async createUniqueCertificateNumber(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const year = new Date().getFullYear();
+
+      const randomPart = Math.random()
+        .toString(36)
+        .substring(2, 10)
+        .toUpperCase();
+
+      const certificateNumber = `EREVNA-${year}-${randomPart}`;
+
+      const existing = await this.prisma.certificate.findUnique({
+        where: {
+          certificateNumber,
+        },
+      });
+
+      if (!existing) {
+        return certificateNumber;
+      }
+    }
+
+    throw new BadRequestException(
+      'Unable to generate a unique certificate number',
+    );
+  }
+
+  private async createUniqueVerificationCode(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const randomPart = Math.random()
+        .toString(36)
+        .substring(2, 14)
+        .toUpperCase();
+
+      const verificationCode = `EV-${randomPart}`;
+
+      const existing = await this.prisma.certificate.findUnique({
+        where: {
+          verificationCode,
+        },
+      });
+
+      if (!existing) {
+        return verificationCode;
+      }
+    }
+
+    throw new BadRequestException(
+      'Unable to generate a unique verification code',
+    );
   }
 }

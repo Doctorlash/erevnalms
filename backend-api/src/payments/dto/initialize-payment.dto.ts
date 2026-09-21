@@ -1,19 +1,8 @@
-import { IsEmail, IsEnum, IsString } from 'class-validator';
-
-export enum SubscriptionPlan {
-  FREE = 'FREE',
-  BASIC = 'BASIC',
-  PREMIUM = 'PREMIUM',
-  SCHOOL = 'SCHOOL',
-}
+import { IsNotEmpty, IsString, IsUUID } from 'class-validator';
 
 export class InitializePaymentDto {
   @IsString()
-  userId!: string;
-
-  @IsEmail()
-  email!: string;
-
-  @IsEnum(SubscriptionPlan)
-  plan!: SubscriptionPlan;
+  @IsNotEmpty()
+  @IsUUID()
+  cohortId!: string;
 }

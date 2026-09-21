@@ -27,7 +27,7 @@ interface Profile {
 export default function ProfilePage() {
   useStudentAuth();
 
-  const { user } = useAuth();
+  const { user, updateUser } = useAuth();
 
   const [profile, setProfile] = useState<Profile | null>(null);
 
@@ -44,15 +44,15 @@ export default function ProfilePage() {
 
   const [passwordLoading, setPasswordLoading] = useState(false);
 
-  const loadProfile = async () => {
-    if (!user) return;
+  const loadProfile = async (): Promise<Profile | null> => {
+    if (!user) return null;
 
     try {
       setLoading(true);
 
       const response = await api.get("/profile/me");
 
-      setProfile({
+      const profileData: Profile = {
         id: response.data.id,
         firstName: response.data.firstName || "",
         lastName: response.data.lastName || "",
@@ -65,11 +65,17 @@ export default function ProfilePage() {
         role: response.data.role || "",
         isActive: response.data.isActive,
         createdAt: response.data.createdAt,
-      });
+      };
+
+      setProfile(profileData);
+
+      return profileData;
     } catch (error: any) {
       console.error("Failed to load profile:", error);
 
       alert(error?.response?.data?.message || "Unable to load your profile.");
+
+      return null;
     } finally {
       setLoading(false);
     }
@@ -79,7 +85,7 @@ export default function ProfilePage() {
     if (!user) return;
 
     loadProfile();
-  }, [user]);
+  }, [user?.id]);
 
   const updateField = (field: keyof Profile, value: string) => {
     setProfile((current) => {
@@ -105,6 +111,15 @@ export default function ProfilePage() {
         school: profile.school,
         classLevel: profile.classLevel,
         bio: profile.bio,
+      });
+
+      /*
+       * Keep the authenticated user's name synchronized
+       * with the profile page.
+       */
+      updateUser({
+        firstName: profile.firstName,
+        lastName: profile.lastName,
       });
 
       alert("Profile updated successfully.");
@@ -146,6 +161,18 @@ export default function ProfilePage() {
 
       await api.post("/profile/avatar", formData);
 
+      /*
+       * Reload the profile from the backend so the backend remains
+       * the source of truth for the final stored image URL.
+       */
+      const updatedProfile = await loadProfile();
+
+      if (updatedProfile) {
+        updateUser({
+          profileImage: updatedProfile.profileImage || null,
+        });
+      }
+
       alert("Profile picture updated successfully.");
 
       setSelectedFile(null);
@@ -157,8 +184,6 @@ export default function ProfilePage() {
       if (fileInput) {
         fileInput.value = "";
       }
-
-      await loadProfile();
     } catch (error: any) {
       console.error("Failed to upload profile picture:", error);
 

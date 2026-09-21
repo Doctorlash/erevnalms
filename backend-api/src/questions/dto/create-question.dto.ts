@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum } from 'class-validator';
+import { IsEnum, IsOptional, IsString, MinLength } from 'class-validator';
 
 export enum Difficulty {
   EASY = 'EASY',
@@ -9,26 +9,31 @@ export enum Difficulty {
 export enum ExamType {
   WAEC = 'WAEC',
   JAMB = 'JAMB',
-  NECO = 'NECO',
 }
 
 export class CreateQuestionDto {
   @IsString()
+  @MinLength(1)
   question!: string;
 
   @IsString()
+  @MinLength(1)
   optionA!: string;
 
   @IsString()
+  @MinLength(1)
   optionB!: string;
 
   @IsString()
+  @MinLength(1)
   optionC!: string;
 
   @IsString()
+  @MinLength(1)
   optionD!: string;
 
   @IsString()
+  @MinLength(1)
   correctAnswer!: string;
 
   @IsOptional()
@@ -42,6 +47,7 @@ export class CreateQuestionDto {
   examType!: ExamType;
 
   @IsString()
+  @MinLength(1)
   subjectId!: string;
 
   @IsOptional()

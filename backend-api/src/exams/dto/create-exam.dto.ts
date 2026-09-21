@@ -1,4 +1,4 @@
-import { IsBoolean, IsInt, IsString } from 'class-validator';
+import { IsBoolean, IsInt, IsOptional, IsString } from 'class-validator';
 
 export class CreateExamDto {
   @IsString()
@@ -6,6 +6,10 @@ export class CreateExamDto {
 
   @IsString()
   subjectId!: string;
+
+  @IsOptional()
+  @IsString()
+  cohortId?: string;
 
   @IsInt()
   duration!: number;
@@ -15,4 +19,8 @@ export class CreateExamDto {
 
   @IsBoolean()
   isPublished!: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  isFinalExam?: boolean;
 }

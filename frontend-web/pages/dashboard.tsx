@@ -1,10 +1,40 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 
 import useStudentAuth from "../hooks/useStudentAuth";
 import StudentLayout from "../layouts/StudentLayout";
 import DashboardCard from "../components/DashboardCard";
 import api from "../services/api";
+
+type SubscriptionStatus = "ACTIVE" | "EXPIRED" | "CANCELLED" | "PENDING";
+
+type Programme = "JAMB" | "WAEC";
+
+interface Cohort {
+  id: string;
+  name: string;
+  programme: Programme;
+  description?: string | null;
+  startDate: string;
+  endDate: string;
+  fee: number;
+  status?: "UPCOMING" | "ACTIVE" | "ENDED" | "CANCELLED";
+}
+
+interface Subscription {
+  id: string;
+  plan?: "FREE" | "BASIC" | "PREMIUM" | "SCHOOL" | null;
+  billingType?: "COHORT" | "LEGACY";
+  status: SubscriptionStatus;
+  startDate?: string | null;
+  endDate?: string | null;
+  paymentReference?: string | null;
+  cohortId?: string | null;
+  studentCohortId?: string | null;
+  amount?: number | null;
+  currency?: string | null;
+  createdAt: string;
+}
 
 interface LessonProgress {
   id: string;
@@ -50,9 +80,45 @@ export default function Dashboard() {
 
   const [lessonProgress, setLessonProgress] = useState<LessonProgress[]>([]);
 
-  const [loading, setLoading] = useState(true);
+  const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
 
+  const [cohorts, setCohorts] = useState<Cohort[]>([]);
+
+  const [loading, setLoading] = useState(true);
   const [progressLoading, setProgressLoading] = useState(true);
+  const [subscriptionLoading, setSubscriptionLoading] = useState(true);
+
+  // =========================================================
+  // NORMALIZE API ARRAYS
+  // =========================================================
+
+  const normalizeArray = <T,>(data: any): T[] => {
+    if (Array.isArray(data)) {
+      return data;
+    }
+
+    if (Array.isArray(data?.data)) {
+      return data.data;
+    }
+
+    if (Array.isArray(data?.items)) {
+      return data.items;
+    }
+
+    if (Array.isArray(data?.subscriptions)) {
+      return data.subscriptions;
+    }
+
+    if (Array.isArray(data?.cohorts)) {
+      return data.cohorts;
+    }
+
+    return [];
+  };
+
+  // =========================================================
+  // LOAD MAIN DASHBOARD
+  // =========================================================
 
   useEffect(() => {
     if (!user) return;
@@ -73,6 +139,10 @@ export default function Dashboard() {
 
     loadDashboard();
   }, [user]);
+
+  // =========================================================
+  // LOAD LEARNING PROGRESS
+  // =========================================================
 
   useEffect(() => {
     if (!user) return;
@@ -99,27 +169,109 @@ export default function Dashboard() {
     loadProgress();
   }, [user]);
 
+  // =========================================================
+  // LOAD COHORT / SUBSCRIPTION STATUS
+  // =========================================================
+
+  useEffect(() => {
+    if (!user) return;
+
+    const loadSubscriptionStatus = async () => {
+      try {
+        setSubscriptionLoading(true);
+
+        const [subscriptionsResponse, cohortsResponse] = await Promise.all([
+          api.get("/subscriptions/my"),
+          api.get("/cohorts/my"),
+        ]);
+
+        setSubscriptions(
+          normalizeArray<Subscription>(subscriptionsResponse.data),
+        );
+
+        setCohorts(normalizeArray<Cohort>(cohortsResponse.data));
+      } catch (error) {
+        console.error("Failed to load cohort subscription status:", error);
+      } finally {
+        setSubscriptionLoading(false);
+      }
+    };
+
+    loadSubscriptionStatus();
+  }, [user]);
+
+  // =========================================================
+  // DASHBOARD VALUES
+  // =========================================================
+
   const enrollments = stats?.stats?.enrollments ?? 0;
 
   const notifications = stats?.notifications?.length ?? 0;
 
   const certificates = stats?.certificates?.length ?? 0;
 
-  /*
-   * REAL PROGRESS
-   *
-   * This now comes from LessonProgress.averageProgress
-   * instead of the old artificial calculation.
-   */
   const progress = progressStats?.averageProgress ?? 0;
 
   const completedLessons = progressStats?.completedLessons ?? 0;
 
   const totalLessonsTracked = progressStats?.totalLessonsTracked ?? 0;
 
-  /*
-   * Lessons that have been started but not completed.
-   */
+  // =========================================================
+  // CURRENT ACTIVE SUBSCRIPTION
+  // =========================================================
+
+  const activeSubscription = useMemo(() => {
+    const now = new Date();
+
+    return (
+      subscriptions.find((subscription) => {
+        if (subscription.status !== "ACTIVE") {
+          return false;
+        }
+
+        if (!subscription.endDate) {
+          return true;
+        }
+
+        return new Date(subscription.endDate) > now;
+      }) || null
+    );
+  }, [subscriptions]);
+
+  // =========================================================
+  // MOST RECENT PENDING SUBSCRIPTION
+  // =========================================================
+
+  const pendingSubscription = useMemo(() => {
+    return (
+      subscriptions
+        .filter((subscription) => subscription.status === "PENDING")
+        .sort(
+          (a, b) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+        )[0] || null
+    );
+  }, [subscriptions]);
+
+  // =========================================================
+  // FIND SUBSCRIPTION COHORT
+  // =========================================================
+
+  const subscriptionCohort = useMemo(() => {
+    if (!activeSubscription?.cohortId) {
+      return null;
+    }
+
+    return (
+      cohorts.find((cohort) => cohort.id === activeSubscription.cohortId) ||
+      null
+    );
+  }, [activeSubscription, cohorts]);
+
+  // =========================================================
+  // CONTINUE LEARNING
+  // =========================================================
+
   const continueLearning = lessonProgress
     .filter(
       (item) => item.completed === false && item.progress > 0 && item.lesson,
@@ -137,9 +289,10 @@ export default function Dashboard() {
     })
     .slice(0, 5);
 
-  /*
-   * Recently completed lessons.
-   */
+  // =========================================================
+  // RECENTLY COMPLETED
+  // =========================================================
+
   const completedLessonList = lessonProgress
     .filter((item) => item.completed === true && item.lesson)
     .sort((a, b) => {
@@ -155,25 +308,43 @@ export default function Dashboard() {
     })
     .slice(0, 5);
 
-  const formatDate = (date?: string | null) => {
-    if (!date) return "";
+  // =========================================================
+  // DATE FORMATTER
+  // =========================================================
 
-    return new Date(date).toLocaleDateString();
+  const formatDate = (date?: string | null) => {
+    if (!date) {
+      return "";
+    }
+
+    return new Date(date).toLocaleDateString("en-NG", {
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+    });
   };
+
+  // =========================================================
+  // LOADING STATE
+  // =========================================================
 
   if (loading && !stats) {
     return (
       <StudentLayout>
+        {" "}
         <div className="flex justify-center items-center py-20">
-          <p className="text-gray-500">Loading your dashboard...</p>
-        </div>
+          {" "}
+          <p className="text-gray-500">Loading your dashboard...</p>{" "}
+        </div>{" "}
       </StudentLayout>
     );
   }
 
   return (
     <StudentLayout>
-      {/* Welcome Banner */}
+      {/* =====================================================
+WELCOME
+===================================================== */}
 
       <div className="bg-gradient-to-r from-blue-600 to-indigo-700 text-white rounded-2xl p-8 mb-8 shadow-lg">
         <h1 className="text-4xl font-bold mb-2">
@@ -185,7 +356,9 @@ export default function Dashboard() {
         </p>
       </div>
 
-      {/* Statistics */}
+      {/* =====================================================
+      SUMMARY CARDS
+  ===================================================== */}
 
       <div className="grid md:grid-cols-4 gap-6 mb-8">
         <DashboardCard title="Subjects" value={enrollments} />
@@ -197,7 +370,120 @@ export default function Dashboard() {
         <DashboardCard title="Notifications" value={notifications} />
       </div>
 
-      {/* Real Learning Progress */}
+      {/* =====================================================
+      COHORT / SUBSCRIPTION STATUS
+  ===================================================== */}
+
+      <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">
+              Programme & Subscription
+            </h2>
+
+            <p className="text-sm text-gray-500 mt-1">
+              Your current cohort and learning access status.
+            </p>
+          </div>
+
+          <Link
+            href="/dashboard/subscription"
+            className="text-blue-600 hover:underline text-sm font-semibold"
+          >
+            Manage Subscription
+          </Link>
+        </div>
+
+        {subscriptionLoading ? (
+          <div className="py-8 text-center text-gray-500">
+            Loading your subscription status...
+          </div>
+        ) : activeSubscription ? (
+          <div className="mt-5 border border-green-200 bg-green-50 rounded-xl p-5">
+            <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+              <div>
+                <p className="text-sm text-gray-600">
+                  {subscriptionCohort?.programme || "Programme"}
+                </p>
+
+                <h3 className="text-xl font-bold text-green-700 mt-1">
+                  {subscriptionCohort?.name || "Active Cohort"}
+                </h3>
+              </div>
+
+              <span className="inline-flex w-fit px-4 py-2 rounded-full bg-green-100 text-green-700 font-semibold">
+                ● Active
+              </span>
+            </div>
+
+            <div className="grid sm:grid-cols-2 gap-4 mt-5">
+              <div className="bg-white rounded-xl p-4">
+                <p className="text-sm text-gray-500">Subscription Started</p>
+
+                <p className="font-semibold text-gray-900 mt-1">
+                  {formatDate(activeSubscription.startDate)}
+                </p>
+              </div>
+
+              <div className="bg-white rounded-xl p-4">
+                <p className="text-sm text-gray-500">Access Ends</p>
+
+                <p className="font-semibold text-gray-900 mt-1">
+                  {formatDate(activeSubscription.endDate)}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : pendingSubscription ? (
+          <div className="mt-5 border border-yellow-200 bg-yellow-50 rounded-xl p-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-yellow-800">
+                  Payment Processing
+                </h3>
+
+                <p className="text-yellow-700 mt-1">
+                  Your cohort subscription is currently pending. Please complete
+                  or verify your payment.
+                </p>
+              </div>
+
+              <Link
+                href="/dashboard/subscription"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold text-center"
+              >
+                View Payment
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <div className="mt-5 border border-blue-200 bg-blue-50 rounded-xl p-5">
+            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+              <div>
+                <h3 className="text-lg font-bold text-blue-800">
+                  No Active Cohort Subscription
+                </h3>
+
+                <p className="text-blue-700 mt-1">
+                  View available cohorts and complete payment to activate your
+                  paid programme access.
+                </p>
+              </div>
+
+              <Link
+                href="/dashboard/subscription"
+                className="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2 rounded-lg font-semibold text-center"
+              >
+                View Cohorts
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* =====================================================
+      LEARNING PROGRESS
+  ===================================================== */}
 
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
         <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-4">
@@ -248,7 +534,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Continue Learning */}
+      {/* =====================================================
+      CONTINUE LEARNING
+  ===================================================== */}
 
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
         <div className="flex items-center justify-between mb-5">
@@ -338,7 +626,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Recently Completed */}
+      {/* =====================================================
+      RECENTLY COMPLETED
+  ===================================================== */}
 
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
         <div className="flex items-center justify-between mb-5">
@@ -404,7 +694,9 @@ export default function Dashboard() {
         )}
       </div>
 
-      {/* Quick Actions */}
+      {/* =====================================================
+      QUICK ACTIONS
+  ===================================================== */}
 
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
         <h2 className="text-xl font-bold mb-4">Quick Actions</h2>
@@ -440,35 +732,28 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Certificates */}
+      {/* =====================================================
+      CERTIFICATES
+  ===================================================== */}
 
       <div className="bg-white rounded-2xl shadow-lg p-6 mb-8">
-        <h2 className="text-xl font-bold mb-4">Certificates</h2>
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-bold">Certificates</h2>
 
-        <Link
-          href="/dashboard/certificates"
-          className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-xl hover:bg-indigo-700 transition"
-        >
-          View My Certificates
-        </Link>
-      </div>
+            <p className="text-sm text-gray-500 mt-1">
+              View certificates you have earned from your completed learning
+              programmes.
+            </p>
+          </div>
 
-      {/* Premium Banner */}
-
-      <div className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white p-8 rounded-2xl shadow-lg">
-        <h2 className="text-2xl font-bold mb-2">Upgrade to Premium 🚀</h2>
-
-        <p className="mb-4">
-          Unlock advanced CBT exams, analytics, live classes, premium lessons
-          and future AI tutoring.
-        </p>
-
-        <Link
-          href="/dashboard/subscription"
-          className="bg-white text-orange-600 px-6 py-3 rounded-xl font-bold"
-        >
-          Upgrade Now
-        </Link>
+          <Link
+            href="/dashboard/certificates"
+            className="inline-block bg-indigo-600 text-white px-6 py-3 rounded-xl hover:bg-indigo-700 transition text-center"
+          >
+            View My Certificates
+          </Link>
+        </div>
       </div>
     </StudentLayout>
   );

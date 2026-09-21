@@ -8,16 +8,20 @@ import { CertificatesService } from './certificates.service';
 export class CertificatesController {
   constructor(private readonly certificatesService: CertificatesService) {}
 
+  /**
+   * Generate a certificate after the student's cohort
+   * completion requirements have been satisfied.
+   */
   @Post('generate')
   generate(
     @Body()
     body: {
-      userId: string;
-      subjectId?: string;
-      examId?: string;
+      studentCohortId: string;
     },
   ) {
-    return this.certificatesService.generate(body);
+    return this.certificatesService.generate({
+      studentCohortId: body.studentCohortId,
+    });
   }
 
   @Get('student/:userId')
@@ -30,7 +34,7 @@ export class CertificatesController {
 
   /*
    * IMPORTANT:
-   * This must come BEFORE @Get(':id')
+   * This route must remain before @Get(':id').
    */
   @Get('verify/:certificateNumber')
   verify(

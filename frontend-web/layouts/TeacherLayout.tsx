@@ -1,3 +1,5 @@
+/* eslint-disable @next/next/no-img-element */
+
 import { ReactNode } from "react";
 import Image from "next/image";
 
@@ -17,11 +19,18 @@ export default function TeacherLayout({ children }: Props) {
     `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`.toUpperCase() ||
     "T";
 
+  const profileImage = user?.profileImage || "";
+
+  const fullName =
+    `${user?.firstName || "Teacher"} ${user?.lastName || ""}`.trim();
+
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100">
       {/* SIDEBAR */}
+
       <aside className="hidden h-screen w-72 shrink-0 flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl lg:flex">
         {/* BRAND */}
+
         <div className="shrink-0 border-b border-white/10 px-6 py-6">
           <div className="flex items-center gap-3">
             <div className="relative shrink-0">
@@ -47,17 +56,28 @@ export default function TeacherLayout({ children }: Props) {
         </div>
 
         {/* TEACHER PROFILE */}
+
         <div className="shrink-0 px-5 py-5">
           <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 shadow-lg">
             <div className="flex items-center gap-3">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-lg font-bold text-white shadow-lg ring-2 ring-white/10">
-                {initials}
+              <div className="relative shrink-0">
+                {profileImage ? (
+                  <img
+                    src={profileImage}
+                    alt={fullName || "Teacher"}
+                    className="h-12 w-12 rounded-full object-cover shadow-lg ring-2 ring-white/10"
+                  />
+                ) : (
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-lg font-bold text-white shadow-lg ring-2 ring-white/10">
+                    {initials}
+                  </div>
+                )}
+
+                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-400 border-2 border-slate-900" />
               </div>
 
               <div className="min-w-0">
-                <p className="truncate font-semibold text-white">
-                  {user?.firstName || "Teacher"} {user?.lastName || ""}
-                </p>
+                <p className="truncate font-semibold text-white">{fullName}</p>
 
                 <div className="mt-1.5 inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2.5 py-1 text-xs font-medium text-emerald-300">
                   <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
@@ -69,6 +89,7 @@ export default function TeacherLayout({ children }: Props) {
         </div>
 
         {/* NAVIGATION */}
+
         <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 [scrollbar-color:#475569_transparent] [scrollbar-width:thin]">
           <div className="mb-3 flex items-center gap-2 px-3">
             <span className="h-px flex-1 bg-white/10" />
@@ -84,6 +105,7 @@ export default function TeacherLayout({ children }: Props) {
         </div>
 
         {/* FOOTER */}
+
         <div className="shrink-0 border-t border-white/10 px-5 py-4">
           <p className="text-center text-xs text-slate-500">
             © {new Date().getFullYear()} Erevna LMS
@@ -92,11 +114,14 @@ export default function TeacherLayout({ children }: Props) {
       </aside>
 
       {/* MAIN */}
+
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         {/* HEADER */}
+
         <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white/90 shadow-sm backdrop-blur-xl">
           <div className="flex h-20 items-center justify-between px-5 sm:px-6 lg:px-8">
             {/* WELCOME */}
+
             <div className="min-w-0">
               <p className="mb-0.5 text-xs font-semibold uppercase tracking-wider text-emerald-600 sm:text-sm">
                 Teacher Portal
@@ -108,8 +133,10 @@ export default function TeacherLayout({ children }: Props) {
             </div>
 
             {/* HEADER ACTIONS */}
+
             <div className="flex items-center gap-2 sm:gap-3">
               {/* NOTIFICATIONS */}
+
               <button
                 type="button"
                 aria-label="Notifications"
@@ -135,14 +162,25 @@ export default function TeacherLayout({ children }: Props) {
               <div className="hidden h-8 w-px bg-slate-200 sm:block" />
 
               {/* USER */}
+
               <div className="flex items-center gap-2 sm:gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-sm font-bold text-white shadow-md ring-2 ring-emerald-100">
-                  {initials}
+                <div className="relative shrink-0">
+                  {profileImage ? (
+                    <img
+                      src={profileImage}
+                      alt={fullName || "Teacher"}
+                      className="h-10 w-10 rounded-full object-cover shadow-md ring-2 ring-emerald-100"
+                    />
+                  ) : (
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-emerald-500 to-teal-500 text-sm font-bold text-white shadow-md ring-2 ring-emerald-100">
+                      {initials}
+                    </div>
+                  )}
                 </div>
 
                 <div className="hidden min-w-0 md:block">
                   <p className="max-w-[150px] truncate text-sm font-semibold text-slate-700">
-                    {user?.firstName || "Teacher"} {user?.lastName || ""}
+                    {fullName}
                   </p>
 
                   <p className="text-xs text-slate-400">Teacher</p>
@@ -155,6 +193,7 @@ export default function TeacherLayout({ children }: Props) {
         </header>
 
         {/* CONTENT */}
+
         <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
           <div className="mx-auto w-full max-w-[1600px]">{children}</div>
         </main>

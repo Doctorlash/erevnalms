@@ -1,53 +1,44 @@
+import { useEffect } from "react";
 import { useRouter } from "next/router";
-import { useEffect, useState } from "react";
-
-import api from "../services/api";
 
 export default function PaymentSuccess() {
   const router = useRouter();
 
-  const { reference } = router.query;
-
-  const [loading, setLoading] = useState(true);
-
-  const [success, setSuccess] = useState(false);
-
   useEffect(() => {
-    if (!reference) return;
+    if (!router.isReady) {
+      return;
+    }
 
-    api
-      .get(`/payments/verify/${reference}`)
-      .then(() => {
-        setSuccess(true);
-      })
-      .catch(() => {
-        setSuccess(false);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [reference]);
+    const query = new URLSearchParams();
 
-  if (loading) {
-    return <div className="p-10">Verifying payment...</div>;
-  }
+    Object.entries(router.query).forEach(([key, value]) => {
+      if (Array.isArray(value)) {
+        value.forEach((item) => {
+          query.append(key, item);
+        });
+      } else if (typeof value === "string") {
+        query.set(key, value);
+      }
+    });
+
+    const queryString = query.toString();
+
+    router.replace(
+      `/dashboard/payment/callback${queryString ? `?${queryString}` : ""}`,
+    );
+  }, [router.isReady, router.query]);
 
   return (
-    <div className="p-10">
-      {success ? (
-        <>
-          <h1 className="text-3xl font-bold">Payment Successful</h1>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+      <div className="bg-white rounded-2xl shadow-lg p-8 text-center">
+        <div className="mx-auto mb-5 h-12 w-12 rounded-full border-4 border-indigo-200 border-t-indigo-600 animate-spin" />
 
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="mt-4 bg-green-600 text-white px-6 py-2 rounded"
-          >
-            Go To Dashboard
-          </button>
-        </>
-      ) : (
-        <h1 className="text-3xl font-bold">Payment Verification Failed</h1>
-      )}
+        <h1 className="text-xl font-bold text-slate-900">Processing Payment</h1>
+
+        <p className="text-gray-500 mt-2">
+          Taking you to payment verification...
+        </p>
+      </div>
     </div>
   );
 }

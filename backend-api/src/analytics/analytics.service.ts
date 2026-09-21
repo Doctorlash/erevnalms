@@ -40,25 +40,48 @@ export class AnalyticsService {
   async leaderboard() {
     const sums = await this.prisma.examAttempt.groupBy({
       by: ['userId'],
+      where: {
+        completed: true,
+      },
       _sum: {
         score: true,
       },
     });
 
-    const users = await this.prisma.user.findMany();
+    if (sums.length === 0) {
+      return [];
+    }
 
-    const sumMap = new Map<string, number>();
+    const userIds = sums.map((item) => item.userId);
 
-    sums.forEach((s) => {
-      sumMap.set(s.userId, s._sum.score ?? 0);
+    const users = await this.prisma.user.findMany({
+      where: {
+        id: {
+          in: userIds,
+        },
+      },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+      },
     });
 
-    return users
-      .map((user) => ({
-        userId: user.id,
-        name: `${user.firstName} ${user.lastName}`,
-        totalScore: sumMap.get(user.id) ?? 0,
-      }))
+    const userMap = new Map(users.map((user) => [user.id, user]));
+
+    return sums
+      .map((sum) => {
+        const user = userMap.get(sum.userId);
+
+        return {
+          userId: sum.userId,
+          name: user
+            ? `${user.firstName} ${user.lastName}`.trim()
+            : 'Unknown Student',
+          totalScore: sum._sum.score ?? 0,
+        };
+      })
       .sort((a, b) => b.totalScore - a.totalScore);
   }
 
@@ -75,6 +98,28 @@ export class AnalyticsService {
       completedAttempts,
       totalEnrollments,
       totalCertificates,
+
+      jambStudents,
+      waecStudents,
+
+      totalCohorts,
+      upcomingCohorts,
+      activeCohorts,
+      endedCohorts,
+      totalCohortMemberships,
+
+      totalSubscriptions,
+      activeSubscriptions,
+      pendingSubscriptions,
+      expiredSubscriptions,
+
+      totalPayments,
+      paidPayments,
+      pendingPayments,
+      failedPayments,
+      refundedPayments,
+
+      completedScoreAggregate,
     ] = await Promise.all([
       this.prisma.user.count(),
 
@@ -109,26 +154,128 @@ export class AnalyticsService {
       this.prisma.enrollment.count(),
 
       this.prisma.certificate.count(),
+
+      this.prisma.studentProgramme.count({
+        where: {
+          programme: 'JAMB',
+        },
+      }),
+
+      this.prisma.studentProgramme.count({
+        where: {
+          programme: 'WAEC',
+        },
+      }),
+
+      this.prisma.cohort.count(),
+
+      this.prisma.cohort.count({
+        where: {
+          status: 'UPCOMING',
+        },
+      }),
+
+      this.prisma.cohort.count({
+        where: {
+          status: 'ACTIVE',
+        },
+      }),
+
+      this.prisma.cohort.count({
+        where: {
+          status: 'ENDED',
+        },
+      }),
+
+      this.prisma.studentCohort.count(),
+
+      this.prisma.subscription.count(),
+
+      this.prisma.subscription.count({
+        where: {
+          status: 'ACTIVE',
+        },
+      }),
+
+      this.prisma.subscription.count({
+        where: {
+          status: 'PENDING',
+        },
+      }),
+
+      this.prisma.subscription.count({
+        where: {
+          status: 'EXPIRED',
+        },
+      }),
+
+      this.prisma.payment.count(),
+
+      this.prisma.payment.count({
+        where: {
+          status: 'PAID',
+        },
+      }),
+
+      this.prisma.payment.count({
+        where: {
+          status: 'PENDING',
+        },
+      }),
+
+      this.prisma.payment.count({
+        where: {
+          status: 'FAILED',
+        },
+      }),
+
+      this.prisma.payment.count({
+        where: {
+          status: 'REFUNDED',
+        },
+      }),
+
+      this.prisma.examAttempt.aggregate({
+        where: {
+          completed: true,
+        },
+        _avg: {
+          score: true,
+        },
+      }),
     ]);
 
-    const completedScoreAggregate = await this.prisma.examAttempt.aggregate({
+    const paidRevenueAggregate = await this.prisma.payment.aggregate({
       where: {
-        completed: true,
+        status: 'PAID',
       },
-      _avg: {
-        score: true,
+      _sum: {
+        amount: true,
       },
     });
 
     const averageScore = completedScoreAggregate._avg.score ?? 0;
+
+    const totalRevenue = paidRevenueAggregate._sum.amount ?? 0;
 
     const recentAttempts = await this.prisma.examAttempt.findMany({
       where: {
         completed: true,
       },
       include: {
-        user: true,
-        exam: true,
+        user: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+          },
+        },
+        exam: {
+          select: {
+            id: true,
+            title: true,
+          },
+        },
       },
       orderBy: {
         startedAt: 'desc',
@@ -158,6 +305,11 @@ export class AnalyticsService {
         teachers: totalTeachers,
       },
 
+      programmes: {
+        jambStudents,
+        waecStudents,
+      },
+
       academic: {
         subjects: totalSubjects,
         lessons: totalLessons,
@@ -167,6 +319,30 @@ export class AnalyticsService {
         completedAttempts,
         enrollments: totalEnrollments,
         certificates: totalCertificates,
+      },
+
+      cohorts: {
+        total: totalCohorts,
+        upcoming: upcomingCohorts,
+        active: activeCohorts,
+        ended: endedCohorts,
+        memberships: totalCohortMemberships,
+      },
+
+      subscriptions: {
+        total: totalSubscriptions,
+        active: activeSubscriptions,
+        pending: pendingSubscriptions,
+        expired: expiredSubscriptions,
+      },
+
+      payments: {
+        total: totalPayments,
+        paid: paidPayments,
+        pending: pendingPayments,
+        failed: failedPayments,
+        refunded: refundedPayments,
+        totalRevenue,
       },
 
       performance: {

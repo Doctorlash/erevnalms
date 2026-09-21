@@ -1,21 +1,32 @@
 import { useRouter } from "next/router";
 import { useEffect, useState } from "react";
+import axios from "axios";
 
-import api from "../../services/api";
-
-interface CertificateData {
+interface CertificateVerification {
   certificateNumber: string;
-  studentName: string;
-  subject: string;
-  exam: string;
-  issuedAt: string;
-  platform: string;
-}
+  verificationCode: string;
 
-interface VerificationResponse {
+  studentName: string;
+
+  programme: "JAMB" | "WAEC";
+
+  cohort: {
+    id: string;
+    name: string;
+    startDate: string;
+    endDate: string;
+  };
+
+  completionDate: string;
+  issuedAt: string;
+
+  status: "ISSUED" | "REVOKED";
   valid: boolean;
-  message?: string;
-  certificate?: CertificateData;
+
+  revokedAt?: string | null;
+  revocationReason?: string | null;
+
+  platform: string;
 }
 
 export default function VerifyCertificatePage() {
@@ -23,135 +34,308 @@ export default function VerifyCertificatePage() {
 
   const { certificateNumber } = router.query;
 
-  const [data, setData] = useState<VerificationResponse | null>(null);
+  const [certificate, setCertificate] =
+    useState<CertificateVerification | null>(null);
 
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (!router.isReady || !certificateNumber) {
       return;
     }
 
-    const verify = async () => {
+    const verifyCertificate = async () => {
       try {
-        const response = await api.get(
-          `/certificates/verify/${certificateNumber}`,
+        setLoading(true);
+        setError("");
+
+        const number = Array.isArray(certificateNumber)
+          ? certificateNumber[0]
+          : certificateNumber;
+
+        const response = await axios.get<CertificateVerification>(
+          `${process.env.NEXT_PUBLIC_API_URL}/certificates/verify/${encodeURIComponent(
+            number,
+          )}`,
         );
 
-        setData(response.data);
-      } catch (error) {
-        console.error("Certificate verification failed:", error);
+        setCertificate(response.data);
+      } catch (err) {
+        console.error("Certificate verification failed:", err);
 
-        setData({
-          valid: false,
-          message: "Unable to verify certificate.",
-        });
+        if (axios.isAxiosError(err) && err.response?.status === 404) {
+          setError(
+            "This certificate could not be found. Please check the certificate number and try again.",
+          );
+        } else {
+          setError(
+            "Unable to verify this certificate at the moment. Please try again.",
+          );
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    verify();
+    verifyCertificate();
   }, [router.isReady, certificateNumber]);
 
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100">
-        <div className="bg-white p-10 rounded-3xl shadow-xl text-center">
-          <h1 className="text-2xl font-bold text-indigo-700">
-            Verifying Certificate...
-          </h1>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data?.valid || !data.certificate) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-100 px-6">
-        <div className="bg-white rounded-3xl shadow-xl p-10 max-w-lg w-full text-center">
-          <div className="text-6xl mb-5">❌</div>
-
-          <h1 className="text-3xl font-bold text-red-600 mb-3">
-            Invalid Certificate
-          </h1>
-
-          <p className="text-gray-500">
-            {data?.message ||
-              "This certificate could not be found in the Erevna certificate registry."}
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const certificate = data.certificate;
+  const formatDate = (date: string) => {
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "long",
+      year: "numeric",
+    }).format(new Date(date));
+  };
 
   return (
-    <div className="min-h-screen bg-slate-100 py-12 px-6">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white rounded-3xl shadow-2xl overflow-hidden">
-          <div className="bg-gradient-to-r from-indigo-700 via-purple-700 to-pink-600 text-white text-center p-10">
-            <div className="text-6xl mb-4">🏆</div>
+    <main className="min-h-screen bg-gray-50 px-4 py-10">
+      <div className="mx-auto max-w-3xl">
+        <div className="mb-8 text-center">
+          <p className="text-sm font-semibold uppercase tracking-widest text-gray-500">
+            EREVNA LMS
+          </p>
 
-            <h1 className="text-4xl font-bold">Certificate Verified</h1>
+          <h1 className="mt-2 text-3xl font-bold text-gray-900">
+            Certificate Verification
+          </h1>
 
-            <p className="text-indigo-100 mt-2">Erevna Leadership Academy</p>
-          </div>
-
-          <div className="p-10">
-            <div className="bg-green-50 border border-green-200 rounded-2xl p-5 mb-8 text-center">
-              <p className="text-green-700 font-bold text-lg">
-                ✓ AUTHENTIC CERTIFICATE
-              </p>
-
-              <p className="text-green-600 text-sm mt-1">
-                This certificate exists in the Erevna certificate registry.
-              </p>
-            </div>
-
-            <div className="space-y-6">
-              <div>
-                <p className="text-gray-500 text-sm">Certificate Number</p>
-
-                <p className="text-xl font-bold text-indigo-700">
-                  {certificate.certificateNumber}
-                </p>
-              </div>
-
-              <div>
-                <p className="text-gray-500 text-sm">Student</p>
-
-                <p className="text-2xl font-bold">{certificate.studentName}</p>
-              </div>
-
-              <div>
-                <p className="text-gray-500 text-sm">Subject</p>
-
-                <p className="font-semibold">{certificate.subject}</p>
-              </div>
-
-              <div>
-                <p className="text-gray-500 text-sm">Assessment</p>
-
-                <p className="font-semibold">{certificate.exam}</p>
-              </div>
-
-              <div>
-                <p className="text-gray-500 text-sm">Date Issued</p>
-
-                <p className="font-semibold">
-                  {new Date(certificate.issuedAt).toLocaleDateString("en-NG")}
-                </p>
-              </div>
-            </div>
-
-            <div className="border-t mt-8 pt-6 text-center text-sm text-gray-500">
-              Officially issued by {certificate.platform}.
-            </div>
-          </div>
+          <p className="mt-2 text-sm text-gray-600">
+            Verify the authenticity and current status of an Erevna LMS
+            certificate.
+          </p>
         </div>
+
+        {loading && (
+          <div className="rounded-2xl border bg-white p-10 text-center shadow-sm">
+            <div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-gray-800" />
+
+            <p className="mt-4 text-sm text-gray-600">
+              Verifying certificate...
+            </p>
+          </div>
+        )}
+
+        {!loading && error && (
+          <div className="rounded-2xl border border-red-200 bg-white p-10 text-center shadow-sm">
+            <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-red-100">
+              <svg
+                className="h-8 w-8 text-red-600"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M6 6l12 12M18 6 6 18"
+                />
+              </svg>
+            </div>
+
+            <h2 className="mt-5 text-xl font-bold text-gray-900">
+              Certificate Not Found
+            </h2>
+
+            <p className="mx-auto mt-2 max-w-lg text-sm text-gray-600">
+              {error}
+            </p>
+          </div>
+        )}
+
+        {!loading && !error && certificate && (
+          <div className="overflow-hidden rounded-2xl border bg-white shadow-sm">
+            <div
+              className={`px-6 py-8 text-center ${
+                certificate.valid ? "bg-green-50" : "bg-red-50"
+              }`}
+            >
+              <div
+                className={`mx-auto flex h-20 w-20 items-center justify-center rounded-full ${
+                  certificate.valid ? "bg-green-100" : "bg-red-100"
+                }`}
+              >
+                {certificate.valid ? (
+                  <svg
+                    className="h-10 w-10 text-green-600"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="m5 12 4 4L19 6"
+                    />
+                  </svg>
+                ) : (
+                  <svg
+                    className="h-10 w-10 text-red-600"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M6 6l12 12M18 6 6 18"
+                    />
+                  </svg>
+                )}
+              </div>
+
+              <h2
+                className={`mt-5 text-2xl font-bold ${
+                  certificate.valid ? "text-green-800" : "text-red-800"
+                }`}
+              >
+                {certificate.valid
+                  ? "Certificate Verified"
+                  : "Certificate Revoked"}
+              </h2>
+
+              <p
+                className={`mt-2 text-sm ${
+                  certificate.valid ? "text-green-700" : "text-red-700"
+                }`}
+              >
+                {certificate.valid
+                  ? "This certificate is currently valid in the Erevna LMS records."
+                  : "This certificate exists in the Erevna LMS records but is no longer valid."}
+              </p>
+            </div>
+
+            <div className="space-y-6 p-6 sm:p-8">
+              <div className="text-center">
+                <p className="text-xs font-semibold uppercase tracking-widest text-gray-500">
+                  Certificate of Completion
+                </p>
+
+                <h3 className="mt-3 text-2xl font-bold text-gray-900">
+                  {certificate.studentName}
+                </h3>
+
+                <p className="mt-2 text-sm text-gray-600">
+                  {certificate.programme} Programme
+                </p>
+              </div>
+
+              <div className="grid gap-5 border-y py-6 sm:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Cohort
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold text-gray-900">
+                    {certificate.cohort.name}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Programme
+                  </p>
+
+                  <p className="mt-1 text-sm font-semibold text-gray-900">
+                    {certificate.programme}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Cohort Start
+                  </p>
+
+                  <p className="mt-1 text-sm text-gray-800">
+                    {formatDate(certificate.cohort.startDate)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Cohort End
+                  </p>
+
+                  <p className="mt-1 text-sm text-gray-800">
+                    {formatDate(certificate.cohort.endDate)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Completion Date
+                  </p>
+
+                  <p className="mt-1 text-sm text-gray-800">
+                    {formatDate(certificate.completionDate)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Issue Date
+                  </p>
+
+                  <p className="mt-1 text-sm text-gray-800">
+                    {formatDate(certificate.issuedAt)}
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Certificate Number
+                  </p>
+
+                  <p className="mt-1 break-all rounded-lg bg-gray-50 p-3 font-mono text-sm text-gray-800">
+                    {certificate.certificateNumber}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Verification Code
+                  </p>
+
+                  <p className="mt-1 break-all rounded-lg bg-gray-50 p-3 font-mono text-sm text-gray-800">
+                    {certificate.verificationCode}
+                  </p>
+                </div>
+              </div>
+
+              {!certificate.valid && certificate.revocationReason && (
+                <div className="rounded-lg border border-red-200 bg-red-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700">
+                    Revocation Reason
+                  </p>
+
+                  <p className="mt-1 text-sm text-red-700">
+                    {certificate.revocationReason}
+                  </p>
+
+                  {certificate.revokedAt && (
+                    <p className="mt-2 text-xs text-red-600">
+                      Revoked on {formatDate(certificate.revokedAt)}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              <div className="border-t pt-5 text-center">
+                <p className="text-xs text-gray-500">
+                  Verification provided by{" "}
+                  <span className="font-semibold">{certificate.platform}</span>
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
-    </div>
+    </main>
   );
 }

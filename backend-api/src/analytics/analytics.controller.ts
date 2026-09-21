@@ -1,4 +1,12 @@
-import { Controller, Get, Param, UseGuards } from '@nestjs/common';
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+import {
+  Controller,
+  ForbiddenException,
+  Get,
+  Param,
+  Req,
+  UseGuards,
+} from '@nestjs/common';
 
 import { AnalyticsService } from './analytics.service';
 
@@ -13,11 +21,20 @@ export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('student/:userId')
-  studentOverview(@Param('userId') userId: string) {
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles(Role.STUDENT, Role.ADMIN)
+  studentOverview(@Param('userId') userId: string, @Req() req: any) {
+    if (req.user?.role === Role.STUDENT && req.user?.id !== userId) {
+      throw new ForbiddenException(
+        "You are not allowed to view another student's analytics.",
+      );
+    }
+
     return this.analyticsService.studentOverview(userId);
   }
 
   @Get('leaderboard')
+  @UseGuards(JwtAuthGuard)
   leaderboard() {
     return this.analyticsService.leaderboard();
   }

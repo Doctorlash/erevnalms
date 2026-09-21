@@ -1,4 +1,4 @@
-import { IsDateString, IsInt, IsString } from 'class-validator';
+import { IsDateString, IsInt, IsOptional, IsString } from 'class-validator';
 
 export class CreateAssignmentDto {
   @IsString()
@@ -9,6 +9,10 @@ export class CreateAssignmentDto {
 
   @IsString()
   teacherId!: string;
+
+  @IsOptional()
+  @IsString()
+  cohortId?: string;
 
   @IsString()
   description!: string;

@@ -57,6 +57,13 @@ model User {
   teachingSubjects           Subject[]                   @relation("TeacherSubjects")
   subscriptions              Subscription[]
   teacherProfile             TeacherProfile?
+
+  cohortMemberships StudentCohort[]
+  payments          Payment[]
+
+  @@index([role])
+  @@index([isActive])
+  @@index([createdAt])
 }
 
 model StudentProgramme {
@@ -70,6 +77,57 @@ model StudentProgramme {
   @@unique([userId, programme])
   @@index([userId])
   @@index([programme])
+}
+
+model Cohort {
+  id          String               @id @default(uuid())
+  name        String
+  programme   StudentProgrammeType
+  description String?
+  startDate   DateTime
+  endDate     DateTime
+  fee         Int
+  status      CohortStatus         @default(UPCOMING)
+  createdAt   DateTime             @default(now())
+  updatedAt   DateTime             @updatedAt
+
+  students      StudentCohort[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  enrollments   Enrollment[]
+  certificates  Certificate[]
+  exams         Exam[]
+  assignments   Assignment[]
+
+  @@index([programme])
+  @@index([status])
+  @@index([startDate])
+  @@index([endDate])
+  @@index([programme, status])
+}
+
+model StudentCohort {
+  id          String              @id @default(uuid())
+  userId      String
+  cohortId    String
+  status      StudentCohortStatus @default(ACTIVE)
+  joinedAt    DateTime            @default(now())
+  completedAt DateTime?
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
+  cohort Cohort @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+
+  subscriptions Subscription[]
+  payments      Payment[]
+  enrollments   Enrollment[]
+  certificates  Certificate[]
+
+  @@unique([userId, cohortId])
+  @@index([userId])
+  @@index([cohortId])
+  @@index([status])
+  @@index([userId, status])
+  @@index([cohortId, status])
 }
 
 model Subject {
@@ -95,49 +153,59 @@ model Subject {
   Lesson              Lesson[]
   LiveClass           LiveClass[]
   questions           Question[]
-  teacher             User?                       @relation("TeacherSubjects", fields: [teacherId], references: [id])
+  teacher             User?                       @relation("TeacherSubjects", fields: [teacherId], references: [id], onDelete: SetNull)
   topics              Topic[]
 
   @@unique([name, programme])
   @@index([programme])
   @@index([teacherId])
+  @@index([programme, isActive])
 }
 
 model Lesson {
-  id              String           @id @default(uuid())
+  id              String       @id @default(uuid())
   title           String
   description     String?
   content         String
   videoUrl        String?
   subjectId       String?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
   duration        Int?
-  isPublished     Boolean          @default(false)
+  isPublished     Boolean      @default(false)
   topicId         String
-  isPremium       Boolean          @default(false)
+  isPremium       Boolean      @default(false)
   approvedAt      DateTime?
   approvedById    String?
   createdById     String?
   rejectionReason String?
-  status          LessonStatus     @default(DRAFT)
-  approvedBy      User?            @relation("LessonApprovedBy", fields: [approvedById], references: [id])
-  createdBy       User?            @relation("LessonCreatedBy", fields: [createdById], references: [id])
-  Subject         Subject?         @relation(fields: [subjectId], references: [id])
-  topic           Topic            @relation(fields: [topicId], references: [id])
-  lessonProgress  LessonProgress[]
+  status          LessonStatus @default(DRAFT)
+
+  approvedBy     User?            @relation("LessonApprovedBy", fields: [approvedById], references: [id], onDelete: SetNull)
+  createdBy      User?            @relation("LessonCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  Subject        Subject?         @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  topic          Topic            @relation(fields: [topicId], references: [id], onDelete: Restrict)
+  lessonProgress LessonProgress[]
+
+  @@index([subjectId])
+  @@index([topicId])
+  @@index([status])
+  @@index([isPublished])
 }
 
 model Topic {
-  id          String     @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
   description String?
   subjectId   String
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-  lessons     Lesson[]
-  questions   Question[]
-  subject     Subject    @relation(fields: [subjectId], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  lessons   Lesson[]
+  questions Question[]
+  subject   Subject    @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+
+  @@index([subjectId])
 }
 
 model Enrollment {
@@ -149,8 +217,20 @@ model Enrollment {
   enrolledAt DateTime             @default(now())
   expiresAt  DateTime?
 
-  subject Subject @relation(fields: [subjectId], references: [id])
-  user    User    @relation(fields: [userId], references: [id])
+  /**
+   * Cohort relationship.
+   * FREE enrollments may remain without a cohort.
+   * PAID enrollments should be linked to the
+   * StudentCohort that granted the access.
+   */
+  cohortId        String?
+  studentCohortId String?
+
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  cohort        Cohort?        @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+  studentCohort StudentCohort? @relation(fields: [studentCohortId], references: [id], onDelete: Restrict)
 
   @@unique([userId, subjectId])
   @@index([userId])
@@ -158,6 +238,9 @@ model Enrollment {
   @@index([programme])
   @@index([type])
   @@index([expiresAt])
+  @@index([cohortId])
+  @@index([studentCohortId])
+  @@index([userId, programme])
 }
 
 model SubjectRequest {
@@ -178,6 +261,7 @@ model SubjectRequest {
   @@index([subjectId])
   @@index([programme])
   @@index([status])
+  @@index([userId, status])
 }
 
 model TeacherSubjectApplication {
@@ -207,14 +291,17 @@ model LessonProgress {
   completed  Boolean  @default(false)
   progress   Int      @default(0)
   lastViewed DateTime @default(now())
-  lesson     Lesson   @relation(fields: [lessonId], references: [id])
-  user       User     @relation(fields: [userId], references: [id])
+
+  lesson Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([userId, lessonId])
+  @@index([userId])
+  @@index([lessonId])
 }
 
 model Question {
-  id            String         @id @default(uuid())
+  id            String     @id @default(uuid())
   question      String
   optionA       String
   optionB       String
@@ -223,81 +310,181 @@ model Question {
   correctAnswer String
   explanation   String?
   subjectId     String
-  createdAt     DateTime       @default(now())
-  difficulty    Difficulty     @default(EASY)
-  examType      ExamType       @default(JAMB)
+  createdAt     DateTime   @default(now())
+  difficulty    Difficulty @default(EASY)
+  examType      ExamType   @default(JAMB)
   topicId       String?
-  updatedAt     DateTime       @updatedAt
+  updatedAt     DateTime   @updatedAt
+
   examAnswers   ExamAnswer[]
   examQuestions ExamQuestion[]
-  subject       Subject        @relation(fields: [subjectId], references: [id])
-  topic         Topic?         @relation(fields: [topicId], references: [id])
+  subject       Subject        @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  topic         Topic?         @relation(fields: [topicId], references: [id], onDelete: SetNull)
+
+  @@index([subjectId])
+  @@index([topicId])
+  @@index([examType])
+  @@index([difficulty])
 }
 
 model Exam {
-  id            String         @id @default(uuid())
-  title         String
-  subjectId     String
-  duration      Int
-  totalMarks    Int
-  isPublished   Boolean        @default(false)
-  createdAt     DateTime       @default(now())
+  id          String   @id @default(uuid())
+  title       String
+  subjectId   String
+  cohortId    String?
+  duration    Int
+  totalMarks  Int
+  isPublished Boolean  @default(false)
+  isFinalExam Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
   certificates  Certificate[]
-  subject       Subject        @relation(fields: [subjectId], references: [id])
+  subject       Subject        @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  cohort        Cohort?        @relation(fields: [cohortId], references: [id], onDelete: SetNull)
   attempts      ExamAttempt[]
   examQuestions ExamQuestion[]
+
+  @@index([subjectId])
+  @@index([cohortId])
+  @@index([isPublished])
+  @@index([isFinalExam])
+  @@index([cohortId, isFinalExam])
 }
 
 model ExamAttempt {
-  id          String       @id @default(uuid())
+  id          String    @id @default(uuid())
   examId      String
   userId      String
-  score       Int          @default(0)
-  startedAt   DateTime     @default(now())
+  score       Int       @default(0)
+  startedAt   DateTime  @default(now())
   submittedAt DateTime?
-  completed   Boolean      @default(false)
-  answers     ExamAnswer[]
-  exam        Exam         @relation(fields: [examId], references: [id])
-  user        User         @relation(fields: [userId], references: [id])
+  completed   Boolean   @default(false)
+
+  answers ExamAnswer[]
+  exam    Exam         @relation(fields: [examId], references: [id], onDelete: Restrict)
+  user    User         @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([examId])
+  @@index([userId])
+  @@index([userId, examId])
+  @@index([completed])
 }
 
 model ExamQuestion {
-  id         String   @id @default(uuid())
+  id         String @id @default(uuid())
   examId     String
   questionId String
-  exam       Exam     @relation(fields: [examId], references: [id])
-  question   Question @relation(fields: [questionId], references: [id])
+
+  exam     Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  question Question @relation(fields: [questionId], references: [id], onDelete: Restrict)
 
   @@unique([examId, questionId])
+  @@index([questionId])
 }
 
 model ExamAnswer {
-  id             String      @id @default(uuid())
+  id             String   @id @default(uuid())
   attemptId      String
   questionId     String
   selectedAnswer String
   isCorrect      Boolean
-  createdAt      DateTime    @default(now())
-  attempt        ExamAttempt @relation(fields: [attemptId], references: [id])
-  question       Question    @relation(fields: [questionId], references: [id])
+  createdAt      DateTime @default(now())
+
+  attempt  ExamAttempt @relation(fields: [attemptId], references: [id], onDelete: Cascade)
+  question Question    @relation(fields: [questionId], references: [id], onDelete: Restrict)
 
   @@unique([attemptId, questionId])
+  @@index([questionId])
+}
+
+enum SubscriptionBillingType {
+  COHORT
+  LEGACY
 }
 
 model Subscription {
-  id               String             @id @default(uuid())
+  id               String                  @id @default(uuid())
   userId           String
-  plan             SubscriptionPlan   @default(FREE)
-  status           SubscriptionStatus @default(PENDING)
+  plan             SubscriptionPlan?
+  billingType      SubscriptionBillingType @default(COHORT)
+  status           SubscriptionStatus      @default(PENDING)
   startDate        DateTime?
   endDate          DateTime?
   paymentReference String?
-  createdAt        DateTime           @default(now())
-  user             User               @relation(fields: [userId], references: [id])
+
+  /**
+   * Cohort-based subscription fields.
+   * These remain optional so existing legacy
+   * subscriptions survive migration.
+   */
+  cohortId        String?
+  studentCohortId String?
+  amount          Int?
+  currency        String  @default("NGN")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  cohort Cohort? @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+
+  studentCohort StudentCohort? @relation(fields: [studentCohortId], references: [id], onDelete: Restrict)
+
+  payments Payment[]
+
+  /**
+   * One subscription per student/cohort.
+   * This prevents duplicate active cohort subscriptions.
+   */
+  @@unique([studentCohortId])
+  @@index([userId])
+  @@index([cohortId])
+  @@index([studentCohortId])
+  @@index([status])
+  @@index([paymentReference])
+  @@index([endDate])
+  @@index([userId, status])
+}
+
+model Payment {
+  id                    String        @id @default(uuid())
+  userId                String
+  cohortId              String?
+  studentCohortId       String?
+  subscriptionId        String?
+  amount                Int
+  currency              String        @default("NGN")
+  status                PaymentStatus @default(PENDING)
+  paymentReference      String?       @unique
+  provider              String        @default("PAYSTACK")
+  providerTransactionId String?       @unique
+  paymentMethod         String?
+  gatewayResponse       String?
+  paidAt                DateTime?
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  cohort Cohort? @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+
+  studentCohort StudentCohort? @relation(fields: [studentCohortId], references: [id], onDelete: Restrict)
+
+  subscription Subscription? @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([cohortId])
+  @@index([studentCohortId])
+  @@index([subscriptionId])
+  @@index([status])
+  @@index([createdAt])
+  @@index([provider])
+  @@index([userId, status])
 }
 
 model LiveClass {
-  id          String       @id @default(uuid())
+  id          String   @id @default(uuid())
   title       String
   description String?
   subjectId   String
@@ -305,54 +492,73 @@ model LiveClass {
   meetingLink String
   startTime   DateTime
   endTime     DateTime
-  isActive    Boolean      @default(true)
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
   attendances Attendance[]
-  subject     Subject      @relation(fields: [subjectId], references: [id])
-  teacher     User         @relation("TeacherClasses", fields: [teacherId], references: [id])
+  subject     Subject      @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  teacher     User         @relation("TeacherClasses", fields: [teacherId], references: [id], onDelete: Restrict)
+
+  @@index([subjectId])
+  @@index([teacherId])
+  @@index([startTime])
+  @@index([isActive])
 }
 
 model Attendance {
-  id          String    @id @default(uuid())
+  id          String   @id @default(uuid())
   liveClassId String
   studentId   String
-  joinedAt    DateTime  @default(now())
-  liveClass   LiveClass @relation(fields: [liveClassId], references: [id])
-  student     User      @relation("StudentAttendance", fields: [studentId], references: [id])
+  joinedAt    DateTime @default(now())
+
+  liveClass LiveClass @relation(fields: [liveClassId], references: [id], onDelete: Cascade)
+  student   User      @relation("StudentAttendance", fields: [studentId], references: [id], onDelete: Restrict)
 
   @@unique([liveClassId, studentId])
+  @@index([studentId])
 }
 
 model Assignment {
-  id          String                 @id @default(uuid())
+  id          String   @id @default(uuid())
   title       String
   description String?
   subjectId   String
   teacherId   String
+  cohortId    String?
   dueDate     DateTime
-  maxScore    Int                    @default(100)
-  isPublished Boolean                @default(false)
-  createdAt   DateTime               @default(now())
-  updatedAt   DateTime               @updatedAt
-  subject     Subject                @relation(fields: [subjectId], references: [id])
-  teacher     User                   @relation("TeacherAssignments", fields: [teacherId], references: [id])
+  maxScore    Int      @default(100)
+  isPublished Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  subject     Subject                @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  teacher     User                   @relation("TeacherAssignments", fields: [teacherId], references: [id], onDelete: Restrict)
+  cohort      Cohort?                @relation(fields: [cohortId], references: [id], onDelete: SetNull)
   submissions AssignmentSubmission[]
+
+  @@index([subjectId])
+  @@index([teacherId])
+  @@index([cohortId])
+  @@index([dueDate])
+  @@index([isPublished])
 }
 
 model AssignmentSubmission {
-  id           String     @id @default(uuid())
+  id           String    @id @default(uuid())
   assignmentId String
   studentId    String
   content      String
   score        Int?
   feedback     String?
-  submittedAt  DateTime   @default(now())
+  submittedAt  DateTime  @default(now())
   gradedAt     DateTime?
-  assignment   Assignment @relation(fields: [assignmentId], references: [id])
-  student      User       @relation("StudentAssignments", fields: [studentId], references: [id])
+
+  assignment Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  student    User       @relation("StudentAssignments", fields: [studentId], references: [id], onDelete: Restrict)
 
   @@unique([assignmentId, studentId])
+  @@index([studentId])
 }
 
 model Announcement {
@@ -363,8 +569,14 @@ model Announcement {
   subjectId   String?
   isPublished Boolean  @default(true)
   createdAt   DateTime @default(now())
-  subject     Subject? @relation(fields: [subjectId], references: [id])
-  teacher     User     @relation("TeacherAnnouncements", fields: [teacherId], references: [id])
+
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  teacher User     @relation("TeacherAnnouncements", fields: [teacherId], references: [id], onDelete: Restrict)
+
+  @@index([teacherId])
+  @@index([subjectId])
+  @@index([createdAt])
+  @@index([isPublished])
 }
 
 model Notification {
@@ -374,120 +586,188 @@ model Notification {
   message   String
   isRead    Boolean  @default(false)
   createdAt DateTime @default(now())
-  user      User     @relation(fields: [userId], references: [id])
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, isRead])
+  @@index([createdAt])
 }
 
 model Certificate {
-  id                String   @id @default(uuid())
-  userId            String
-  subjectId         String?
-  examId            String?
-  certificateNumber String   @unique
-  issuedAt          DateTime @default(now())
-  exam              Exam?    @relation(fields: [examId], references: [id])
-  subject           Subject? @relation(fields: [subjectId], references: [id])
-  user              User     @relation(fields: [userId], references: [id])
+  id              String               @id @default(uuid())
+  userId          String
+  studentCohortId String
+  cohortId        String
+  programme       StudentProgrammeType
+
+  // Kept for compatibility with existing certificate records.
+  subjectId String?
+  examId    String?
+
+  certificateNumber String @unique
+  verificationCode  String @unique
+
+  completionDate DateTime
+  issuedAt       DateTime @default(now())
+
+  status           CertificateStatus @default(ISSUED)
+  revokedAt        DateTime?
+  revocationReason String?
+
+  user          User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+  studentCohort StudentCohort @relation(fields: [studentCohortId], references: [id], onDelete: Restrict)
+  cohort        Cohort        @relation(fields: [cohortId], references: [id], onDelete: Restrict)
+
+  exam    Exam?    @relation(fields: [examId], references: [id], onDelete: SetNull)
+  subject Subject? @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+
+  @@unique([studentCohortId])
+  @@index([userId])
+  @@index([cohortId])
+  @@index([programme])
+  @@index([subjectId])
+  @@index([examId])
+  @@index([status])
+  @@index([issuedAt])
 }
 
 model CommunityPost {
-  id        String             @id @default(uuid())
+  id        String   @id @default(uuid())
   userId    String
   title     String
   content   String
   subjectId String?
-  createdAt DateTime           @default(now())
-  comments  CommunityComment[]
-  likes     CommunityLike[]
-  subject   Subject?           @relation(fields: [subjectId], references: [id])
-  user      User               @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  comments CommunityComment[]
+  likes    CommunityLike[]
+  subject  Subject?           @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  user     User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([subjectId])
+  @@index([createdAt])
 }
 
 model CommunityComment {
-  id        String        @id @default(uuid())
+  id        String   @id @default(uuid())
   postId    String
   userId    String
   content   String
-  createdAt DateTime      @default(now())
-  post      CommunityPost @relation(fields: [postId], references: [id])
-  user      User          @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([postId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model CommunityLike {
-  id     String        @id @default(uuid())
+  id     String @id @default(uuid())
   postId String
   userId String
-  post   CommunityPost @relation(fields: [postId], references: [id])
-  user   User          @relation(fields: [userId], references: [id])
+
+  post CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user User          @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([postId, userId])
+  @@index([userId])
 }
 
 model DiscussionThread {
-  id        String            @id @default(uuid())
+  id        String   @id @default(uuid())
   title     String
   content   String
   userId    String
   subjectId String?
-  createdAt DateTime          @default(now())
-  replies   DiscussionReply[]
-  subject   Subject?          @relation(fields: [subjectId], references: [id])
-  user      User              @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  replies DiscussionReply[]
+  subject Subject?          @relation(fields: [subjectId], references: [id], onDelete: SetNull)
+  user    User              @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([userId])
+  @@index([subjectId])
+  @@index([createdAt])
 }
 
 model DiscussionReply {
-  id        String           @id @default(uuid())
+  id        String   @id @default(uuid())
   threadId  String
   userId    String
   content   String
-  createdAt DateTime         @default(now())
-  thread    DiscussionThread @relation(fields: [threadId], references: [id])
-  user      User             @relation(fields: [userId], references: [id])
+  createdAt DateTime @default(now())
+
+  thread DiscussionThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  user   User             @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@index([threadId])
+  @@index([userId])
+  @@index([createdAt])
 }
 
 model StudyGroup {
-  id          String        @id @default(uuid())
+  id          String   @id @default(uuid())
   name        String
   description String?
   createdBy   String
-  createdAt   DateTime      @default(now())
-  members     GroupMember[]
+  createdAt   DateTime @default(now())
+
+  members GroupMember[]
+
+  @@index([createdAt])
 }
 
 model GroupMember {
-  id       String     @id @default(uuid())
+  id       String   @id @default(uuid())
   groupId  String
   userId   String
-  joinedAt DateTime   @default(now())
-  group    StudyGroup @relation(fields: [groupId], references: [id])
-  user     User       @relation(fields: [userId], references: [id])
+  joinedAt DateTime @default(now())
+
+  group StudyGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User       @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([groupId, userId])
+  @@index([userId])
 }
 
 model Conversation {
-  id               String    @id @default(uuid())
-  createdAt        DateTime  @default(now())
+  id               String   @id @default(uuid())
+  createdAt        DateTime @default(now())
   participantOneId String
   participantTwoId String
-  participantOne   User      @relation("ParticipantOne", fields: [participantOneId], references: [id])
-  participantTwo   User      @relation("ParticipantTwo", fields: [participantTwoId], references: [id])
-  messages         Message[]
+
+  participantOne User      @relation("ParticipantOne", fields: [participantOneId], references: [id], onDelete: Restrict)
+  participantTwo User      @relation("ParticipantTwo", fields: [participantTwoId], references: [id], onDelete: Restrict)
+  messages       Message[]
+
+  @@index([participantOneId])
+  @@index([participantTwoId])
 }
 
 model Message {
-  id             String            @id @default(uuid())
+  id             String   @id @default(uuid())
   conversationId String
   senderId       String
   content        String
-  createdAt      DateTime          @default(now())
-  isRead         Boolean           @default(false)
+  createdAt      DateTime @default(now())
+  isRead         Boolean  @default(false)
   fileName       String?
   fileSize       Int?
   fileType       String?
   fileUrl        String?
-  conversation   Conversation      @relation(fields: [conversationId], references: [id])
-  sender         User              @relation("SentMessages", fields: [senderId], references: [id])
-  reactions      MessageReaction[]
+
+  conversation Conversation      @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  sender       User              @relation("SentMessages", fields: [senderId], references: [id], onDelete: Restrict)
+  reactions    MessageReaction[]
+
+  @@index([conversationId])
+  @@index([senderId])
+  @@index([createdAt])
+  @@index([conversationId, createdAt])
 }
 
 model MessageReaction {
@@ -496,10 +776,12 @@ model MessageReaction {
   userId    String
   emoji     String
   createdAt DateTime @default(now())
-  message   Message  @relation(fields: [messageId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id])
+
+  message Message @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Restrict)
 
   @@unique([messageId, userId, emoji])
+  @@index([userId])
 }
 
 model TeacherProfile {
@@ -515,7 +797,8 @@ model TeacherProfile {
   twitter        String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model ContactMessage {
@@ -536,6 +819,29 @@ model ContactMessage {
   @@index([userId])
   @@index([type])
   @@index([status])
+  @@index([createdAt])
+}
+
+model Resource {
+  id          String       @id @default(uuid())
+  title       String
+  description String?
+  type        ResourceType
+  fileUrl     String
+  fileName    String
+  fileSize    Int?
+  publicId    String?
+  subjectId   String
+  teacherId   String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  subject Subject @relation(fields: [subjectId], references: [id], onDelete: Restrict)
+  teacher User    @relation(fields: [teacherId], references: [id], onDelete: Restrict)
+
+  @@index([subjectId])
+  @@index([teacherId])
+  @@index([type])
   @@index([createdAt])
 }
 
@@ -561,6 +867,11 @@ enum Difficulty {
   EASY
   MEDIUM
   HARD
+}
+
+enum CertificateStatus {
+  ISSUED
+  REVOKED
 }
 
 enum ExamType {
@@ -617,24 +928,24 @@ enum SubjectRequestStatus {
   REJECTED
 }
 
-model Resource {
-  id          String       @id @default(uuid())
-  title       String
-  description String?
-  type        ResourceType
-  fileUrl     String
-  fileName    String
-  fileSize    Int?
-  publicId    String?
-  subjectId   String
-  teacherId   String
-  createdAt   DateTime     @default(now())
-  updatedAt   DateTime     @updatedAt
+enum CohortStatus {
+  UPCOMING
+  ACTIVE
+  ENDED
+  CANCELLED
+}
 
-  subject Subject @relation(fields: [subjectId], references: [id])
-  teacher User    @relation(fields: [teacherId], references: [id])
+enum StudentCohortStatus {
+  ACTIVE
+  COMPLETED
+  SUSPENDED
+  WITHDRAWN
+}
 
-  @@index([subjectId])
-  @@index([teacherId])
-  @@index([type])
+enum PaymentStatus {
+  PENDING
+  PARTIAL
+  PAID
+  FAILED
+  REFUNDED
 }

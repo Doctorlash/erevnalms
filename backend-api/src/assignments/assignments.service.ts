@@ -17,6 +17,7 @@ export class AssignmentsService {
         description: dto.description,
         subjectId: dto.subjectId,
         teacherId: dto.teacherId,
+        cohortId: dto.cohortId,
         dueDate: new Date(dto.dueDate),
         maxScore: dto.maxScore,
       },
@@ -28,6 +29,7 @@ export class AssignmentsService {
       include: {
         subject: true,
         teacher: true,
+        cohort: true,
       },
       orderBy: {
         createdAt: 'desc',
@@ -41,6 +43,7 @@ export class AssignmentsService {
       include: {
         subject: true,
         teacher: true,
+        cohort: true,
         submissions: true,
       },
     });
@@ -53,6 +56,16 @@ export class AssignmentsService {
   }
 
   async submit(assignmentId: string, dto: SubmitAssignmentDto) {
+    const assignment = await this.prisma.assignment.findUnique({
+      where: {
+        id: assignmentId,
+      },
+    });
+
+    if (!assignment) {
+      throw new NotFoundException('Assignment not found');
+    }
+
     return this.prisma.assignmentSubmission.create({
       data: {
         assignmentId,
@@ -81,7 +94,12 @@ export class AssignmentsService {
         studentId,
       },
       include: {
-        assignment: true,
+        assignment: {
+          include: {
+            subject: true,
+            cohort: true,
+          },
+        },
       },
     });
   }
@@ -93,14 +111,13 @@ export class AssignmentsService {
       },
       include: {
         subject: true,
-
+        cohort: true,
         submissions: {
           include: {
             student: true,
           },
         },
       },
-
       orderBy: {
         createdAt: 'desc',
       },
