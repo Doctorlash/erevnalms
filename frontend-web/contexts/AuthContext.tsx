@@ -12,15 +12,13 @@ import { User } from "../types/user";
 interface AuthContextType {
   user: User | null;
   token: string | null;
+  isHydrated: boolean;
 
   studentLogin: (email: string, password: string) => Promise<User>;
-
   teacherLogin: (email: string, password: string) => Promise<User>;
-
   adminLogin: (email: string, password: string) => Promise<User>;
 
   updateUser: (updates: Partial<User>) => void;
-
   logout: () => void;
 }
 
@@ -30,20 +28,33 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
 
-  useEffect(() => {
-    const savedToken = localStorage.getItem("token");
-    const savedUser = localStorage.getItem("user");
+  /**
+   * Prevent auth guards from redirecting before
+   * localStorage has been checked.
+   */
+  const [isHydrated, setIsHydrated] = useState(false);
 
-    if (savedToken && savedUser) {
-      try {
+  useEffect(() => {
+    try {
+      const savedToken = localStorage.getItem("token");
+      const savedUser = localStorage.getItem("user");
+
+      if (savedToken && savedUser) {
         const parsedUser: User = JSON.parse(savedUser);
 
         setToken(savedToken);
         setUser(parsedUser);
-      } catch {
-        localStorage.removeItem("token");
-        localStorage.removeItem("user");
       }
+    } catch (error) {
+      console.error("Failed to restore authentication session:", error);
+
+      localStorage.removeItem("token");
+      localStorage.removeItem("user");
+
+      setToken(null);
+      setUser(null);
+    } finally {
+      setIsHydrated(true);
     }
   }, []);
 
@@ -68,14 +79,17 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return user;
   };
 
-  const studentLogin = (email: string, password: string) =>
-    authenticate("/auth/student-login", email, password);
+  const studentLogin = (email: string, password: string): Promise<User> => {
+    return authenticate("/auth/student-login", email, password);
+  };
 
-  const teacherLogin = (email: string, password: string) =>
-    authenticate("/auth/teacher-login", email, password);
+  const teacherLogin = (email: string, password: string): Promise<User> => {
+    return authenticate("/auth/teacher-login", email, password);
+  };
 
-  const adminLogin = (email: string, password: string) =>
-    authenticate("/auth/admin-login", email, password);
+  const adminLogin = (email: string, password: string): Promise<User> => {
+    return authenticate("/auth/admin-login", email, password);
+  };
 
   const updateUser = (updates: Partial<User>) => {
     setUser((currentUser) => {
@@ -94,26 +108,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     });
   };
 
+  /**
+   * Logout only clears authentication state.
+   *
+   * Navigation is handled by LogoutButton so that
+   * each role can be sent to its correct login page.
+   */
   const logout = () => {
-    const currentUser = user;
-
     localStorage.removeItem("token");
     localStorage.removeItem("user");
 
     setToken(null);
     setUser(null);
-
-    if (currentUser?.role === "ADMIN") {
-      window.location.href = "/admin-login";
-      return;
-    }
-
-    if (currentUser?.role === "TEACHER") {
-      window.location.href = "/teacher-login";
-      return;
-    }
-
-    window.location.href = "/login";
   };
 
   return (
@@ -121,13 +127,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       value={{
         user,
         token,
+        isHydrated,
 
         studentLogin,
         teacherLogin,
         adminLogin,
 
         updateUser,
-
         logout,
       }}
     >

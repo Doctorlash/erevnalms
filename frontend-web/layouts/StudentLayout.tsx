@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 /* eslint-disable @next/next/no-img-element */
 
-import { ReactNode, useCallback, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { useRouter } from "next/router";
 
@@ -10,6 +10,7 @@ import StudentSidebar from "../components/sidebar/StudentSidebar";
 import LogoutButton from "../components/LogoutButton";
 import { useAuth } from "../contexts/AuthContext";
 import api from "../services/api";
+import useSidebarScroll from "../hooks/useSidebarScroll";
 
 interface Props {
   children: ReactNode;
@@ -30,6 +31,14 @@ export default function StudentLayout({ children }: Props) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const [notificationsLoading, setNotificationsLoading] = useState(false);
+
+  const desktopSidebarRef = useRef<HTMLDivElement | null>(null);
+
+  const mobileSidebarRef = useRef<HTMLDivElement | null>(null);
+
+  useSidebarScroll(desktopSidebarRef, "erevna-student-sidebar-desktop-scroll");
+
+  useSidebarScroll(mobileSidebarRef, "erevna-student-sidebar-mobile-scroll");
 
   const firstName = user?.firstName || "Student";
   const lastName = user?.lastName || "";
@@ -106,15 +115,15 @@ export default function StudentLayout({ children }: Props) {
   };
 
   return (
-    <div className="h-screen overflow-hidden bg-slate-100 flex">
+    <div className="flex h-screen overflow-hidden bg-slate-100">
       {/* DESKTOP SIDEBAR */}
 
-      <aside className="hidden lg:flex h-screen w-72 shrink-0 bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl flex-col relative">
-        <div className="pointer-events-none absolute top-0 left-0 right-0 h-40 bg-blue-500/10 blur-3xl" />
+      <aside className="relative hidden h-screen w-72 shrink-0 flex-col bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl lg:flex">
+        <div className="pointer-events-none absolute left-0 right-0 top-0 h-40 bg-blue-500/10 blur-3xl" />
 
         {/* LOGO */}
 
-        <div className="relative shrink-0 px-6 py-6 border-b border-white/10">
+        <div className="relative shrink-0 border-b border-white/10 px-6 py-6">
           <div className="flex items-center gap-3">
             <div className="relative shrink-0">
               <div className="absolute inset-0 rounded-2xl bg-blue-500/30 blur-md" />
@@ -131,7 +140,7 @@ export default function StudentLayout({ children }: Props) {
             <div className="min-w-0">
               <h1 className="text-2xl font-extrabold tracking-tight">Erevna</h1>
 
-              <p className="text-[11px] text-slate-400 mt-0.5 tracking-wide">
+              <p className="mt-0.5 text-[11px] tracking-wide text-slate-400">
                 Learning Management System
               </p>
             </div>
@@ -141,7 +150,7 @@ export default function StudentLayout({ children }: Props) {
         {/* STUDENT PROFILE */}
 
         <div className="relative shrink-0 p-5">
-          <div className="group rounded-2xl bg-white/[0.06] border border-white/10 p-4 transition-all duration-200 hover:bg-white/[0.09] hover:border-white/15">
+          <div className="group rounded-2xl border border-white/10 bg-white/[0.06] p-4 transition-all duration-200 hover:border-white/15 hover:bg-white/[0.09]">
             <div className="flex items-center gap-3">
               <div className="relative shrink-0">
                 {profileImage ? (
@@ -151,21 +160,21 @@ export default function StudentLayout({ children }: Props) {
                     className="h-12 w-12 rounded-full object-cover shadow-lg shadow-blue-900/30 ring-2 ring-white/10"
                   />
                 ) : (
-                  <div className="h-12 w-12 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold text-lg shadow-lg shadow-blue-900/30">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 text-lg font-bold text-white shadow-lg shadow-blue-900/30">
                     {initials}
                   </div>
                 )}
 
-                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-400 border-2 border-slate-900" />
+                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-slate-900 bg-emerald-400" />
               </div>
 
               <div className="min-w-0 flex-1">
-                <p className="font-semibold text-white truncate">
+                <p className="truncate font-semibold text-white">
                   {firstName} {lastName}
                 </p>
 
-                <div className="flex items-center gap-2 mt-1.5">
-                  <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 border border-blue-400/10 px-2.5 py-0.5 text-[11px] font-semibold text-blue-300">
+                <div className="mt-1.5 flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-blue-400/10 bg-blue-500/15 px-2.5 py-0.5 text-[11px] font-semibold text-blue-300">
                     <span className="h-1.5 w-1.5 rounded-full bg-blue-400" />
                     Student
                   </span>
@@ -177,8 +186,11 @@ export default function StudentLayout({ children }: Props) {
 
         {/* NAVIGATION */}
 
-        <div className="relative min-h-0 flex-1 overflow-y-auto px-4 pb-6 custom-scrollbar">
-          <p className="px-3 mb-3 text-[10px] uppercase tracking-[0.18em] text-slate-500 font-bold">
+        <div
+          ref={desktopSidebarRef}
+          className="custom-scrollbar relative min-h-0 flex-1 overflow-y-auto px-4 pb-6"
+        >
+          <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
             My Learning
           </p>
 
@@ -193,7 +205,7 @@ export default function StudentLayout({ children }: Props) {
           <div className="flex items-center justify-center gap-2">
             <div className="h-1 w-1 rounded-full bg-blue-400" />
 
-            <p className="text-[11px] text-slate-500 font-medium">
+            <p className="text-[11px] font-medium text-slate-500">
               © {new Date().getFullYear()} Erevna LMS
             </p>
 
@@ -215,13 +227,15 @@ export default function StudentLayout({ children }: Props) {
       {/* MOBILE SIDEBAR */}
 
       <aside
-        className={`fixed inset-y-0 left-0 z-[70] w-[290px] max-w-[85vw] bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl transform transition-transform duration-300 ease-out lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-[70] w-[290px] max-w-[85vw] transform bg-gradient-to-b from-slate-950 via-slate-900 to-slate-800 text-white shadow-2xl transition-transform duration-300 ease-out lg:hidden ${
           mobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
         aria-label="Student navigation"
       >
-        <div className="h-full flex flex-col">
-          <div className="shrink-0 px-5 py-5 border-b border-white/10">
+        <div className="flex h-full flex-col">
+          {/* MOBILE HEADER */}
+
+          <div className="shrink-0 border-b border-white/10 px-5 py-5">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Image
@@ -244,7 +258,7 @@ export default function StudentLayout({ children }: Props) {
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(false)}
-                className="h-9 w-9 rounded-xl bg-white/5 border border-white/10 flex items-center justify-center text-slate-300 hover:bg-white/10 hover:text-white transition"
+                className="flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-slate-300 transition hover:bg-white/10 hover:text-white"
                 aria-label="Close navigation menu"
               >
                 <CloseIcon />
@@ -252,8 +266,10 @@ export default function StudentLayout({ children }: Props) {
             </div>
           </div>
 
+          {/* MOBILE PROFILE */}
+
           <div className="shrink-0 p-5">
-            <div className="rounded-2xl bg-white/[0.06] border border-white/10 p-4">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4">
               <div className="flex items-center gap-3">
                 <div className="relative shrink-0">
                   {profileImage ? (
@@ -263,20 +279,20 @@ export default function StudentLayout({ children }: Props) {
                       className="h-11 w-11 rounded-full object-cover ring-1 ring-white/10"
                     />
                   ) : (
-                    <div className="h-11 w-11 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold">
+                    <div className="flex h-11 w-11 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 font-bold text-white">
                       {initials}
                     </div>
                   )}
 
-                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full bg-emerald-400 border-2 border-slate-900" />
+                  <span className="absolute bottom-0 right-0 h-3 w-3 rounded-full border-2 border-slate-900 bg-emerald-400" />
                 </div>
 
                 <div className="min-w-0">
-                  <p className="font-semibold truncate">
+                  <p className="truncate font-semibold">
                     {firstName} {lastName}
                   </p>
 
-                  <p className="text-xs text-slate-400 mt-0.5">
+                  <p className="mt-0.5 text-xs text-slate-400">
                     Student account
                   </p>
                 </div>
@@ -284,8 +300,13 @@ export default function StudentLayout({ children }: Props) {
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 custom-scrollbar">
-            <p className="px-3 mb-3 text-[10px] uppercase tracking-[0.18em] text-slate-500 font-bold">
+          {/* MOBILE NAVIGATION */}
+
+          <div
+            ref={mobileSidebarRef}
+            className="custom-scrollbar min-h-0 flex-1 overflow-y-auto px-4 pb-6"
+          >
+            <p className="mb-3 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">
               My Learning
             </p>
 
@@ -294,8 +315,10 @@ export default function StudentLayout({ children }: Props) {
             </div>
           </div>
 
+          {/* MOBILE FOOTER */}
+
           <div className="shrink-0 border-t border-white/10 px-5 py-4">
-            <p className="text-[11px] text-slate-500 text-center">
+            <p className="text-center text-[11px] text-slate-500">
               © {new Date().getFullYear()} Erevna LMS
             </p>
           </div>
@@ -304,27 +327,29 @@ export default function StudentLayout({ children }: Props) {
 
       {/* MAIN APPLICATION */}
 
-      <div className="min-w-0 min-h-0 flex-1 flex flex-col">
-        <header className="shrink-0 sticky top-0 z-30 bg-white/90 backdrop-blur-xl border-b border-slate-200/80 shadow-[0_1px_12px_rgba(15,23,42,0.04)]">
-          <div className="min-h-[72px] px-4 sm:px-6 lg:px-8 flex items-center justify-between gap-4">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        {/* HEADER */}
+
+        <header className="sticky top-0 z-30 shrink-0 border-b border-slate-200/80 bg-white/90 shadow-[0_1px_12px_rgba(15,23,42,0.04)] backdrop-blur-xl">
+          <div className="flex min-h-[72px] items-center justify-between gap-4 px-4 sm:px-6 lg:px-8">
             {/* LEFT */}
 
-            <div className="flex items-center gap-3 min-w-0">
+            <div className="flex min-w-0 items-center gap-3">
               <button
                 type="button"
                 onClick={() => setMobileMenuOpen(true)}
-                className="lg:hidden h-11 w-11 shrink-0 rounded-xl bg-slate-100 border border-slate-200 text-slate-700 flex items-center justify-center hover:bg-slate-200 transition"
+                className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 bg-slate-100 text-slate-700 transition hover:bg-slate-200 lg:hidden"
                 aria-label="Open navigation menu"
               >
                 <MenuIcon />
               </button>
 
               <div className="min-w-0">
-                <p className="hidden sm:block text-[11px] uppercase tracking-[0.16em] font-bold text-indigo-600 mb-0.5">
+                <p className="mb-0.5 hidden text-[11px] font-bold uppercase tracking-[0.16em] text-indigo-600 sm:block">
                   Student Portal
                 </p>
 
-                <h1 className="text-base sm:text-xl font-bold text-slate-900 truncate">
+                <h1 className="truncate text-base font-bold text-slate-900 sm:text-xl">
                   Welcome back, {firstName}{" "}
                   <span className="hidden sm:inline">👋</span>
                 </h1>
@@ -333,16 +358,16 @@ export default function StudentLayout({ children }: Props) {
 
             {/* RIGHT */}
 
-            <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            <div className="flex shrink-0 items-center gap-2 sm:gap-3">
               {/* NOTIFICATIONS */}
 
               <button
                 type="button"
                 onClick={openNotifications}
-                className={`group relative h-11 w-11 rounded-xl border flex items-center justify-center transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
+                className={`group relative flex h-11 w-11 items-center justify-center rounded-xl border transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 ${
                   unreadCount > 0
-                    ? "bg-indigo-50 border-indigo-200 text-indigo-600 hover:bg-indigo-100 hover:border-indigo-300"
-                    : "bg-slate-50 border-slate-200 text-slate-600 hover:bg-indigo-50 hover:border-indigo-200 hover:text-indigo-600"
+                    ? "border-indigo-200 bg-indigo-50 text-indigo-600 hover:border-indigo-300 hover:bg-indigo-100"
+                    : "border-slate-200 bg-slate-50 text-slate-600 hover:border-indigo-200 hover:bg-indigo-50 hover:text-indigo-600"
                 }`}
                 title={
                   unreadCount > 0
@@ -362,31 +387,31 @@ export default function StudentLayout({ children }: Props) {
                 <BellIcon />
 
                 {unreadCount > 0 && (
-                  <span className="absolute -top-2 -right-2 min-w-[21px] h-[21px] px-1 rounded-full bg-red-500 text-white text-[10px] font-extrabold flex items-center justify-center border-2 border-white shadow-sm">
+                  <span className="absolute -right-2 -top-2 flex h-[21px] min-w-[21px] items-center justify-center rounded-full border-2 border-white bg-red-500 px-1 text-[10px] font-extrabold text-white shadow-sm">
                     {unreadCount > 99 ? "99+" : unreadCount}
                   </span>
                 )}
 
                 {unreadCount > 0 && (
-                  <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-indigo-50" />
+                  <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-indigo-50" />
                 )}
 
                 {notificationsLoading && unreadCount === 0 && (
-                  <span className="absolute top-2 right-2 h-2 w-2 rounded-full bg-slate-300 animate-pulse" />
+                  <span className="absolute right-2 top-2 h-2 w-2 animate-pulse rounded-full bg-slate-300" />
                 )}
               </button>
 
-              <div className="hidden sm:block h-8 w-px bg-slate-200 mx-1" />
+              <div className="mx-1 hidden h-8 w-px bg-slate-200 sm:block" />
 
               {/* DESKTOP USER */}
 
-              <div className="hidden sm:flex items-center gap-3">
-                <div className="text-right hidden md:block">
-                  <p className="text-sm font-semibold text-slate-800 leading-tight">
+              <div className="hidden items-center gap-3 sm:flex">
+                <div className="hidden text-right md:block">
+                  <p className="leading-tight text-sm font-semibold text-slate-800">
                     {firstName} {lastName}
                   </p>
 
-                  <p className="text-[11px] text-slate-400 mt-0.5">Student</p>
+                  <p className="mt-0.5 text-[11px] text-slate-400">Student</p>
                 </div>
 
                 <div className="relative">
@@ -397,18 +422,18 @@ export default function StudentLayout({ children }: Props) {
                       className="h-10 w-10 rounded-full object-cover shadow-sm ring-2 ring-indigo-100"
                     />
                   ) : (
-                    <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold shadow-sm">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 font-bold text-white shadow-sm">
                       {initials}
                     </div>
                   )}
 
-                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-white" />
+                  <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400" />
                 </div>
               </div>
 
               {/* MOBILE USER */}
 
-              <div className="sm:hidden relative">
+              <div className="relative sm:hidden">
                 {profileImage ? (
                   <img
                     src={profileImage}
@@ -416,18 +441,18 @@ export default function StudentLayout({ children }: Props) {
                     className="h-10 w-10 rounded-full object-cover ring-2 ring-indigo-100"
                   />
                 ) : (
-                  <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 flex items-center justify-center text-white font-bold">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 via-indigo-500 to-cyan-400 font-bold text-white">
                     {initials}
                   </div>
                 )}
 
-                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full bg-emerald-400 border-2 border-white" />
+                <span className="absolute bottom-0 right-0 h-2.5 w-2.5 rounded-full border-2 border-white bg-emerald-400" />
               </div>
 
               {/* LOGOUT */}
 
               <div className="ml-1">
-                <LogoutButton className="group h-11 w-11 sm:w-auto px-3 sm:px-4 rounded-xl border border-slate-200 bg-white text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-600 transition-all duration-200 flex items-center justify-center gap-2 font-semibold text-sm" />
+                <LogoutButton className="group flex h-11 w-11 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-600 transition-all duration-200 hover:border-red-200 hover:bg-red-50 hover:text-red-600 sm:w-auto sm:px-4" />
               </div>
             </div>
           </div>
@@ -435,8 +460,8 @@ export default function StudentLayout({ children }: Props) {
 
         {/* CONTENT */}
 
-        <main className="min-h-0 flex-1 overflow-y-auto bg-slate-100 p-4 sm:p-6 lg:p-8 custom-scrollbar">
-          <div className="max-w-[1600px] mx-auto w-full">{children}</div>
+        <main className="custom-scrollbar min-h-0 flex-1 overflow-y-auto bg-slate-100 p-4 sm:p-6 lg:p-8">
+          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
         </main>
       </div>
 

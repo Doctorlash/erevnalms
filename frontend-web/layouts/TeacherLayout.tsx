@@ -1,12 +1,13 @@
 /* eslint-disable @next/next/no-img-element */
 
-import { ReactNode } from "react";
+import { ReactNode, useRef } from "react";
 import Image from "next/image";
 
 import MessageWidget from "../components/messaging/MessageWidget";
 import TeacherSidebar from "../components/sidebar/TeacherSidebar";
 import { useAuth } from "../contexts/AuthContext";
 import LogoutButton from "../components/LogoutButton";
+import useSidebarScroll from "../hooks/useSidebarScroll";
 
 interface Props {
   children: ReactNode;
@@ -14,6 +15,10 @@ interface Props {
 
 export default function TeacherLayout({ children }: Props) {
   const { user } = useAuth();
+
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
+
+  useSidebarScroll(sidebarRef, "erevna-teacher-sidebar-scroll");
 
   const initials =
     `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`.toUpperCase() ||
@@ -73,7 +78,7 @@ export default function TeacherLayout({ children }: Props) {
                   </div>
                 )}
 
-                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full bg-emerald-400 border-2 border-slate-900" />
+                <span className="absolute bottom-0 right-0 h-3.5 w-3.5 rounded-full border-2 border-slate-900 bg-emerald-400" />
               </div>
 
               <div className="min-w-0">
@@ -90,7 +95,10 @@ export default function TeacherLayout({ children }: Props) {
 
         {/* NAVIGATION */}
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 [scrollbar-color:#475569_transparent] [scrollbar-width:thin]">
+        <div
+          ref={sidebarRef}
+          className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 [scrollbar-color:#475569_transparent] [scrollbar-width:thin]"
+        >
           <div className="mb-3 flex items-center gap-2 px-3">
             <span className="h-px flex-1 bg-white/10" />
 

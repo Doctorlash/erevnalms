@@ -42,6 +42,9 @@ export default function ProfilePage() {
     newPassword: "",
   });
 
+  const [showOldPassword, setShowOldPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+
   const [passwordLoading, setPasswordLoading] = useState(false);
 
   const loadProfile = async (): Promise<Profile | null> => {
@@ -113,10 +116,6 @@ export default function ProfilePage() {
         bio: profile.bio,
       });
 
-      /*
-       * Keep the authenticated user's name synchronized
-       * with the profile page.
-       */
       updateUser({
         firstName: profile.firstName,
         lastName: profile.lastName,
@@ -156,21 +155,41 @@ export default function ProfilePage() {
       setUploading(true);
 
       const formData = new FormData();
-
       formData.append("file", selectedFile);
 
-      await api.post("/profile/avatar", formData);
+      const response = await api.post("/profile/avatar", formData);
 
       /*
-       * Reload the profile from the backend so the backend remains
-       * the source of truth for the final stored image URL.
+       * Use the backend response immediately so the new image
+       * appears without waiting for another request.
        */
-      const updatedProfile = await loadProfile();
+      const uploadedProfile = response.data;
 
-      if (updatedProfile) {
-        updateUser({
-          profileImage: updatedProfile.profileImage || null,
+      if (uploadedProfile?.profileImage) {
+        setProfile((current) => {
+          if (!current) return current;
+
+          return {
+            ...current,
+            profileImage: uploadedProfile.profileImage,
+          };
         });
+
+        updateUser({
+          profileImage: uploadedProfile.profileImage,
+        });
+      } else {
+        /*
+         * Fallback: reload the profile from the backend if the
+         * upload response does not contain the updated profile.
+         */
+        const updatedProfile = await loadProfile();
+
+        if (updatedProfile) {
+          updateUser({
+            profileImage: updatedProfile.profileImage || null,
+          });
+        }
       }
 
       alert("Profile picture updated successfully.");
@@ -206,6 +225,11 @@ export default function ProfilePage() {
       return;
     }
 
+    if (password.oldPassword === password.newPassword) {
+      alert("Your new password must be different from your current password.");
+      return;
+    }
+
     try {
       setPasswordLoading(true);
 
@@ -220,6 +244,12 @@ export default function ProfilePage() {
         oldPassword: "",
         newPassword: "",
       });
+
+      /*
+       * Hide both fields again after a successful password change.
+       */
+      setShowOldPassword(false);
+      setShowNewPassword(false);
     } catch (error: any) {
       console.error("Failed to change password:", error);
 
@@ -290,9 +320,10 @@ export default function ProfilePage() {
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   className="w-full text-sm"
-                  onChange={(event) =>
-                    setSelectedFile(event.target.files?.[0] || null)
-                  }
+                  onChange={(event) => {
+                    const file = event.target.files?.[0] || null;
+                    setSelectedFile(file);
+                  }}
                 />
 
                 <p className="text-xs text-gray-400 mt-2">
@@ -307,9 +338,10 @@ export default function ProfilePage() {
               )}
 
               <button
+                type="button"
                 onClick={uploadAvatar}
                 disabled={uploading || !selectedFile}
-                className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-5 py-3 rounded-xl font-semibold"
+                className="mt-4 w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-gray-400 text-white px-5 py-3 rounded-xl font-semibold transition"
               >
                 {uploading ? "Uploading..." : "Upload Picture"}
               </button>
@@ -379,6 +411,7 @@ export default function ProfilePage() {
                   </label>
 
                   <input
+                    type="text"
                     className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.firstName}
                     onChange={(event) =>
@@ -393,6 +426,7 @@ export default function ProfilePage() {
                   </label>
 
                   <input
+                    type="text"
                     className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.lastName}
                     onChange={(event) =>
@@ -407,6 +441,7 @@ export default function ProfilePage() {
                   </label>
 
                   <input
+                    type="email"
                     disabled
                     className="border border-gray-200 bg-gray-100 text-gray-500 rounded-xl p-3 w-full cursor-not-allowed"
                     value={profile.email || ""}
@@ -423,6 +458,7 @@ export default function ProfilePage() {
                   </label>
 
                   <input
+                    type="text"
                     className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.phone}
                     onChange={(event) =>
@@ -437,6 +473,7 @@ export default function ProfilePage() {
                   </label>
 
                   <input
+                    type="text"
                     className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.school}
                     onChange={(event) =>
@@ -451,6 +488,7 @@ export default function ProfilePage() {
                   </label>
 
                   <input
+                    type="text"
                     className="border border-gray-300 rounded-xl p-3 w-full"
                     value={profile.classLevel}
                     onChange={(event) =>
@@ -474,9 +512,10 @@ export default function ProfilePage() {
               </div>
 
               <button
+                type="button"
                 disabled={saving}
                 onClick={updateProfile}
-                className="mt-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-xl font-semibold"
+                className="mt-6 bg-green-600 hover:bg-green-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-xl font-semibold transition"
               >
                 {saving ? "Saving..." : "Save Changes"}
               </button>
@@ -490,42 +529,68 @@ export default function ProfilePage() {
               </h2>
 
               <div className="space-y-4">
+                {/* CURRENT PASSWORD */}
+
                 <div>
                   <label className="block text-sm font-semibold mb-2">
                     Current Password
                   </label>
 
-                  <input
-                    type="password"
-                    className="border border-gray-300 rounded-xl p-3 w-full"
-                    placeholder="Enter your current password"
-                    value={password.oldPassword}
-                    onChange={(event) =>
-                      setPassword({
-                        ...password,
-                        oldPassword: event.target.value,
-                      })
-                    }
-                  />
+                  <div className="relative">
+                    <input
+                      type={showOldPassword ? "text" : "password"}
+                      className="border border-gray-300 rounded-xl p-3 pr-20 w-full"
+                      placeholder="Enter your current password"
+                      value={password.oldPassword}
+                      onChange={(event) =>
+                        setPassword({
+                          ...password,
+                          oldPassword: event.target.value,
+                        })
+                      }
+                      autoComplete="current-password"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setShowOldPassword((current) => !current)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
+                    >
+                      {showOldPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
                 </div>
+
+                {/* NEW PASSWORD */}
 
                 <div>
                   <label className="block text-sm font-semibold mb-2">
                     New Password
                   </label>
 
-                  <input
-                    type="password"
-                    className="border border-gray-300 rounded-xl p-3 w-full"
-                    placeholder="Enter your new password"
-                    value={password.newPassword}
-                    onChange={(event) =>
-                      setPassword({
-                        ...password,
-                        newPassword: event.target.value,
-                      })
-                    }
-                  />
+                  <div className="relative">
+                    <input
+                      type={showNewPassword ? "text" : "password"}
+                      className="border border-gray-300 rounded-xl p-3 pr-20 w-full"
+                      placeholder="Enter your new password"
+                      value={password.newPassword}
+                      onChange={(event) =>
+                        setPassword({
+                          ...password,
+                          newPassword: event.target.value,
+                        })
+                      }
+                      autoComplete="new-password"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setShowNewPassword((current) => !current)}
+                      className="absolute right-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-indigo-600 hover:text-indigo-800"
+                    >
+                      {showNewPassword ? "Hide" : "Show"}
+                    </button>
+                  </div>
 
                   <p className="text-xs text-gray-400 mt-1">
                     Minimum 8 characters.
@@ -534,9 +599,10 @@ export default function ProfilePage() {
               </div>
 
               <button
+                type="button"
                 onClick={changePassword}
                 disabled={passwordLoading}
-                className="mt-6 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-xl font-semibold"
+                className="mt-6 bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white px-6 py-3 rounded-xl font-semibold transition"
               >
                 {passwordLoading ? "Changing..." : "Change Password"}
               </button>

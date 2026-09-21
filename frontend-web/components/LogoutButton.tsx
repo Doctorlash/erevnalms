@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { useRouter } from "next/router";
+
 import { useAuth } from "../contexts/AuthContext";
 
 interface LogoutButtonProps {
@@ -6,33 +8,73 @@ interface LogoutButtonProps {
 }
 
 export default function LogoutButton({ className = "" }: LogoutButtonProps) {
-  const { logout } = useAuth();
   const router = useRouter();
 
-  const handleLogout = async () => {
-    try {
-      // Clear authentication/session
-      await logout();
+  const { user, logout } = useAuth();
 
-      // Explicitly redirect to the login page
-      await router.replace("/login");
-    } catch (error) {
-      console.error("Logout failed:", error);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
-      // Even if logout encounters an error,
-      // send the user back to login.
-      router.replace("/login");
+  const handleLogout = () => {
+    if (isLoggingOut) {
+      return;
     }
+
+    setIsLoggingOut(true);
+
+    const role = user?.role;
+
+    logout();
+
+    if (role === "ADMIN") {
+      router.replace("/admin-login");
+      return;
+    }
+
+    if (role === "TEACHER") {
+      router.replace("/teacher-login");
+      return;
+    }
+
+    router.replace("/login");
   };
 
   return (
     <button
       type="button"
       onClick={handleLogout}
-      className={`flex items-center gap-2 ${className}`}
+      disabled={isLoggingOut}
+      aria-label="Sign out"
+      className={`
+        group
+        flex w-full items-center gap-3
+        rounded-xl
+        px-4 py-3
+        text-left
+        font-semibold
+        text-slate-300
+        transition-all duration-200
+        hover:bg-red-500/10
+        hover:text-red-300
+        disabled:cursor-not-allowed
+        disabled:opacity-60
+        ${className}
+      `}
     >
-      <span>🚪</span>
-      <span>Sign Out</span>
+      <span
+        className="
+          flex h-9 w-9 shrink-0
+          items-center justify-center
+          rounded-lg
+          bg-slate-800
+          text-base
+          transition-colors
+          group-hover:bg-red-500/20
+        "
+      >
+        {isLoggingOut ? "⏳" : "🚪"}
+      </span>
+
+      <span>{isLoggingOut ? "Signing out..." : "Sign Out"}</span>
     </button>
   );
 }

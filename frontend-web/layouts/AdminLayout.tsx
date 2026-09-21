@@ -1,9 +1,10 @@
-import { ReactNode } from "react";
+import { ReactNode, useRef } from "react";
 import Image from "next/image";
 
 import AdminSidebar from "../components/sidebar/AdminSidebar";
 import useAdminAuth from "../hooks/useAdminAuth";
 import LogoutButton from "../components/LogoutButton";
+import useSidebarScroll from "../hooks/useSidebarScroll";
 
 interface Props {
   children: ReactNode;
@@ -11,6 +12,10 @@ interface Props {
 
 export default function AdminLayout({ children }: Props) {
   const { user } = useAdminAuth();
+
+  const sidebarRef = useRef<HTMLDivElement | null>(null);
+
+  useSidebarScroll(sidebarRef, "erevna-admin-sidebar-scroll");
 
   const initials =
     `${user?.firstName?.charAt(0) || ""}${user?.lastName?.charAt(0) || ""}`.toUpperCase() ||
@@ -68,7 +73,10 @@ export default function AdminLayout({ children }: Props) {
         </div>
 
         {/* NAVIGATION */}
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 [scrollbar-color:#475569_transparent] [scrollbar-width:thin]">
+        <div
+          ref={sidebarRef}
+          className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 [scrollbar-color:#475569_transparent] [scrollbar-width:thin]"
+        >
           <div className="mb-3 flex items-center gap-2 px-3">
             <span className="h-px flex-1 bg-white/10" />
 
