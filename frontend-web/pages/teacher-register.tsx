@@ -88,7 +88,7 @@ export default function TeacherRegisterPage() {
         >
           <div className="text-center mb-8">
             <Image
-              src="/logo2.png"
+              src="/logo4.png"
               alt="Erevna Logo"
               width={90}
               height={90}

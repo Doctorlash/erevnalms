@@ -57,7 +57,7 @@ export default function Home() {
             <Link href="/" className="flex items-center gap-4 group shrink-0">
               <div className="relative flex h-16 w-16 items-center justify-center transition duration-300 group-hover:scale-105">
                 <Image
-                  src="/logo2.png"
+                  src="/logo4.png"
                   alt="Erevna Leadership Academy Logo"
                   width={64}
                   height={64}
@@ -208,7 +208,7 @@ export default function Home() {
 
                 <div className="relative rounded-[3rem] border border-white/10 bg-white/5 backdrop-blur-xl p-8 md:p-12 shadow-2xl">
                   <Image
-                    src="/logo3.png"
+                    src="/logo4.png"
                     alt="Erevna Leadership Academy"
                     width={500}
                     height={500}
@@ -990,7 +990,7 @@ export default function Home() {
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white p-1">
                   <Image
-                    src="/logo3.png"
+                    src="/logo4.png"
                     alt="Erevna Logo"
                     width={48}
                     height={48}

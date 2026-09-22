@@ -352,7 +352,7 @@ export default function RegisterPage() {
 
       <div className="hidden min-h-screen flex-col items-center justify-center bg-gradient-to-br from-blue-900 via-slate-900 to-blue-700 p-12 text-white md:flex">
         <Image
-          src="/logo3.png"
+          src="/logo4.png"
           alt="Erevna Logo"
           width={220}
           height={220}
