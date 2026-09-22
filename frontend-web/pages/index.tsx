@@ -990,7 +990,7 @@ export default function Home() {
               <div className="flex items-center gap-3">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white p-1">
                   <Image
-                    src="/logo4.png"
+                    src="/logo2.png"
                     alt="Erevna Logo"
                     width={48}
                     height={48}
